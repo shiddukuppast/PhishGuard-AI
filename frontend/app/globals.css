@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #0B1120;
+    --card: #111827;
+    --border: #263244;
+    --cyan: #06B6D4;
+    --blue: #3B82F6;
+    --danger: #EF4444;
+    --warning: #F59E0B;
+    --success: #10B981;
+  }
+
+  body {
+    background-color: #0B1120;
+    color: #F8FAFC;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom subtle scrollbars for cybersecurity dark UI */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0B1120;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #263244;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
+}
+
+.glow-cyan-subtle {
+  box-shadow: 0 0 20px -5px rgba(6, 182, 212, 0.15);
+}
+
+.glow-danger-subtle {
+  box-shadow: 0 0 20px -5px rgba(239, 68, 68, 0.2);
+}
+
+.cyber-grid-pattern {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(38, 50, 68, 0.3) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(38, 50, 68, 0.3) 1px, transparent 1px);
+}
+
