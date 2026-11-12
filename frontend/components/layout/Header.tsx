@@ -1,8 +1,23 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Bell, ShieldCheck, CheckCircle2, AlertTriangle, ShieldAlert, Sparkles, ExternalLink } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Bell,
+  ShieldCheck,
+  CheckCircle2,
+  AlertTriangle,
+  ShieldAlert,
+  Sparkles,
+  User as UserIcon,
+  Settings,
+  LogOut,
+  ChevronDown,
+  Key,
+} from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/components/shared/ToastContext';
 
 interface HeaderProps {
   title?: string;
@@ -13,8 +28,37 @@ export function Header({
   title = 'Security Overview',
   subtitle = 'Monitor phishing threats and protect your digital environment.',
 }: HeaderProps) {
+  const router = useRouter();
+  const { user, logout } = useAuth();
+  const { info } = useToast();
+
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [unreadCount, setUnreadCount] = useState(3);
+
+  const profileRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    info('Logged Out', 'Your security session has ended.');
+    setShowProfileMenu(false);
+    router.replace('/');
+  };
 
   // Formatted current date
   const currentDate = new Date().toLocaleDateString('en-US', {
@@ -48,6 +92,11 @@ export function Header({
     },
   ];
 
+  const displayName = user?.name || 'Security Analyst';
+  const displayEmail = user?.email || 'analyst@phishguard.sec';
+  const displayInitials = user?.avatarInitials || 'PG';
+  const displayRole = user?.role || 'Threat Analyst';
+
   return (
     <header className="h-16 px-6 border-b border-[#263244] bg-[#0E1526]/80 backdrop-blur-md flex items-center justify-between sticky top-0 z-30">
       {/* Title & Subtitle */}
@@ -62,7 +111,7 @@ export function Header({
         )}
       </div>
 
-      {/* Right Actions: Date, Notification, Quick Scan Shortcut & Avatar */}
+      {/* Right Actions: Date, Notification, Quick Scan Shortcut & Avatar Profile */}
       <div className="flex items-center gap-3">
         {/* Quick Scan Action */}
         <Link
@@ -80,7 +129,7 @@ export function Header({
         </div>
 
         {/* Notifications Dropdown */}
-        <div className="relative">
+        <div className="relative" ref={notifRef}>
           <button
             onClick={() => {
               setShowNotifications(!showNotifications);
@@ -119,14 +168,77 @@ export function Header({
           )}
         </div>
 
-        {/* User Avatar */}
-        <Link href="/settings" className="flex items-center gap-2 pl-2 border-l border-[#263244]/80">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-white text-xs font-semibold ring-1 ring-cyan-500/40 hover:ring-cyan-400 transition-all cursor-pointer">
-            AV
-          </div>
-        </Link>
+        {/* User Profile Dropdown Menu */}
+        <div className="relative pl-2 border-l border-[#263244]/80" ref={profileRef}>
+          <button
+            onClick={() => setShowProfileMenu(!showProfileMenu)}
+            className="flex items-center gap-2 p-1 rounded-lg hover:bg-[#162032] border border-transparent hover:border-[#263244] transition-all group"
+            aria-label="User account menu"
+          >
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-white text-xs font-bold ring-1 ring-cyan-500/40 group-hover:ring-cyan-400 transition-all">
+              {displayInitials}
+            </div>
+            <div className="hidden sm:flex flex-col text-left">
+              <span className="text-xs font-semibold text-slate-200 group-hover:text-cyan-300 transition-colors leading-tight">
+                {displayName}
+              </span>
+              <span className="text-[10px] font-mono text-slate-400 leading-tight">
+                {displayRole}
+              </span>
+            </div>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-colors hidden sm:block" />
+          </button>
+
+          {/* Dropdown Menu Modal */}
+          {showProfileMenu && (
+            <div className="absolute right-0 mt-2 w-64 bg-[#111827] border border-[#263244] rounded-xl shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2">
+              {/* Profile summary */}
+              <div className="p-2.5 border-b border-[#263244] bg-[#0E1526]/80 rounded-lg mb-1">
+                <p className="text-xs font-semibold text-slate-100 truncate">{displayName}</p>
+                <p className="text-[11px] text-slate-400 font-mono truncate mt-0.5">{displayEmail}</p>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-[10px] font-mono uppercase font-semibold text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
+                    {displayRole}
+                  </span>
+                </div>
+              </div>
+
+              {/* Navigation Options */}
+              <div className="space-y-0.5 py-1">
+                <Link
+                  href="/settings"
+                  onClick={() => setShowProfileMenu(false)}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-slate-100 hover:bg-[#162032] transition-colors"
+                >
+                  <Settings className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Account Settings</span>
+                </Link>
+
+                <Link
+                  href="/scanner"
+                  onClick={() => setShowProfileMenu(false)}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-slate-100 hover:bg-[#162032] transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>URL Security Scanner</span>
+                </Link>
+              </div>
+
+              {/* Logout Option */}
+              <div className="pt-1 mt-1 border-t border-[#263244]">
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-red-400" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
 }
-

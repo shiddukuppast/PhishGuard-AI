@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
 import {
   Settings,
@@ -12,24 +13,37 @@ import {
   Copy,
   Check,
   RotateCcw,
-  Save,
   CheckCircle2,
-  Sparkles,
+  Lock,
+  Calendar,
+  ShieldAlert,
 } from 'lucide-react';
 import { UserSettings } from '@/types';
 import { getStoredSettings, saveSettingsToStorage } from '@/lib/storage';
 import { useToast } from '@/components/shared/ToastContext';
+import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 
 export default function SettingsPage() {
+  const { user, isAuthenticated } = useAuth();
   const { success, info } = useToast();
-  const [settings, setSettings] = useState<UserSettings>(getStoredSettings());
+  const [settings, setSettings] = useState<UserSettings>(() => getStoredSettings());
   const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'notifications' | 'security'>('profile');
   const [copiedKey, setCopiedKey] = useState(false);
 
   useEffect(() => {
-    setSettings(getStoredSettings());
-  }, []);
+    const stored = getStoredSettings();
+    if (user) {
+      stored.profile = {
+        name: user.name || stored.profile.name,
+        email: user.email || stored.profile.email,
+        role: user.role || stored.profile.role,
+        organization: user.organization || stored.profile.organization,
+        apiKey: user.apiKey || stored.profile.apiKey,
+      };
+    }
+    setSettings(stored);
+  }, [user]);
 
   const handleToggle = (
     section: 'appearance' | 'notifications' | 'security',
@@ -47,21 +61,7 @@ export default function SettingsPage() {
       saveSettingsToStorage(updated);
       return updated;
     });
-    success('Preference Saved', 'Configuration saved to local profile cache.');
-  };
-
-  const handleProfileChange = (field: keyof UserSettings['profile'], value: string) => {
-    setSettings((prev) => {
-      const updated = {
-        ...prev,
-        profile: {
-          ...prev.profile,
-          [field]: value,
-        },
-      };
-      saveSettingsToStorage(updated);
-      return updated;
-    });
+    success('Preference Saved', 'Configuration saved to your client session.');
   };
 
   const copyApiKey = () => {
@@ -73,8 +73,18 @@ export default function SettingsPage() {
 
   const regenerateApiKey = () => {
     const newKey = 'pg_live_' + Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-    handleProfileChange('apiKey', newKey);
-    success('API Key Regenerated', 'Updated active client bearer token.');
+    setSettings((prev) => {
+      const updated = {
+        ...prev,
+        profile: {
+          ...prev.profile,
+          apiKey: newKey,
+        },
+      };
+      saveSettingsToStorage(updated);
+      return updated;
+    });
+    success('API Key Regenerated', 'Updated active client bearer key.');
   };
 
   return (
@@ -91,7 +101,7 @@ export default function SettingsPage() {
             { id: 'profile', label: 'Analyst Profile', icon: User },
             { id: 'appearance', label: 'Appearance', icon: Sliders },
             { id: 'notifications', label: 'Notifications', icon: Bell },
-            { id: 'security', label: 'Security & ML Rules', icon: Shield },
+            { id: 'security', label: 'Security & Heuristics', icon: Shield },
           ].map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -116,11 +126,18 @@ export default function SettingsPage() {
         {/* Tab 1: Profile Settings */}
         {activeTab === 'profile' && (
           <div className="bg-[#111827] border border-[#263244] rounded-2xl p-6 lg:p-8 shadow-xl space-y-6">
-            <div>
-              <h3 className="text-base font-semibold text-slate-100">Security Analyst Profile</h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Manage your credentials, organization metadata, and API access keys
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#263244] pb-4">
+              <div>
+                <h3 className="text-base font-semibold text-slate-100">Security Analyst Profile</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Authenticated session information retrieved from Python FastAPI & MongoDB Atlas
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-xs font-mono text-cyan-300">
+                <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{isAuthenticated ? 'Live Authenticated Session' : 'Guest Mode'}</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -128,19 +145,19 @@ export default function SettingsPage() {
                 <label className="text-xs font-mono text-slate-400 uppercase">Full Name</label>
                 <input
                   type="text"
-                  value={settings.profile.name}
-                  onChange={(e) => handleProfileChange('name', e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-[#0B1120] border border-[#263244] text-xs text-slate-100 font-sans focus:outline-none focus:border-cyan-500"
+                  readOnly
+                  value={user?.name || settings.profile.name}
+                  className="w-full px-3 py-2 rounded-lg bg-[#0B1120] border border-[#263244] text-xs text-slate-200 font-sans focus:outline-none cursor-default"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-mono text-slate-400 uppercase">Work Email</label>
+                <label className="text-xs font-mono text-slate-400 uppercase">Registered Email</label>
                 <input
                   type="email"
-                  value={settings.profile.email}
-                  onChange={(e) => handleProfileChange('email', e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-[#0B1120] border border-[#263244] text-xs text-slate-100 font-sans focus:outline-none focus:border-cyan-500"
+                  readOnly
+                  value={user?.email || settings.profile.email}
+                  className="w-full px-3 py-2 rounded-lg bg-[#0B1120] border border-[#263244] text-xs text-slate-200 font-sans focus:outline-none cursor-default"
                 />
               </div>
 
@@ -148,29 +165,42 @@ export default function SettingsPage() {
                 <label className="text-xs font-mono text-slate-400 uppercase">Role / Clearance</label>
                 <input
                   type="text"
-                  value={settings.profile.role}
-                  onChange={(e) => handleProfileChange('role', e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-[#0B1120] border border-[#263244] text-xs text-slate-100 font-sans focus:outline-none focus:border-cyan-500"
+                  readOnly
+                  value={user?.role || 'Security Analyst'}
+                  className="w-full px-3 py-2 rounded-lg bg-[#0B1120] border border-[#263244] text-xs text-slate-200 font-sans focus:outline-none cursor-default"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-mono text-slate-400 uppercase">Organization</label>
-                <input
-                  type="text"
-                  value={settings.profile.organization}
-                  onChange={(e) => handleProfileChange('organization', e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-[#0B1120] border border-[#263244] text-xs text-slate-100 font-sans focus:outline-none focus:border-cyan-500"
-                />
+                <label className="text-xs font-mono text-slate-400 uppercase">Account Created Date</label>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0B1120] border border-[#263244] text-xs text-slate-300 font-mono">
+                  <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>
+                    {user?.createdAt
+                      ? new Date(user.createdAt).toLocaleDateString(undefined, {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })
+                      : 'Active Session'}
+                  </span>
+                </div>
               </div>
             </div>
+
+            {user?.id && (
+              <div className="p-3 rounded-lg bg-[#0B1120] border border-[#263244] flex items-center justify-between text-xs font-mono">
+                <span className="text-slate-400">Database User ID:</span>
+                <span className="text-cyan-400 select-all">{user.id}</span>
+              </div>
+            )}
 
             {/* API Key management */}
             <div className="pt-4 border-t border-[#263244] space-y-3">
               <div className="flex items-center gap-2">
                 <Key className="w-4 h-4 text-cyan-400" />
                 <h4 className="text-xs font-mono font-semibold uppercase text-slate-200">
-                  FastAPI Engine Access Key
+                  Client API Access Key
                 </h4>
               </div>
 
@@ -196,7 +226,7 @@ export default function SettingsPage() {
                 </div>
               </div>
               <p className="text-[11px] text-slate-500 font-mono">
-                Used to authenticate automated requests to the upcoming FastAPI prediction cluster.
+                Bearer key used to authorize external queries to your PhishGuard AI instance.
               </p>
             </div>
           </div>
@@ -224,13 +254,13 @@ export default function SettingsPage() {
                   onClick={() => handleToggle('appearance', 'highContrastRisk')}
                   className={cn(
                     'w-11 h-6 rounded-full transition-colors relative focus:outline-none',
-                    settings.appearance.highContrastRisk ? 'bg-cyan-500' : 'bg-[#1E293B]'
+                    (settings.appearance as any)?.highContrastRisk ? 'bg-cyan-500' : 'bg-[#1E293B]'
                   )}
                 >
                   <span
                     className={cn(
                       'w-4 h-4 rounded-full bg-white absolute top-1 transition-transform',
-                      settings.appearance.highContrastRisk ? 'left-6' : 'left-1'
+                      (settings.appearance as any)?.highContrastRisk ? 'left-6' : 'left-1'
                     )}
                   />
                 </button>
@@ -238,32 +268,9 @@ export default function SettingsPage() {
 
               <div className="p-4 flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold text-slate-200">Show Scanning Stage Animations</h4>
+                  <h4 className="text-xs font-semibold text-slate-200">Compact Dashboard Grid</h4>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Display the 5-step heuristic pipeline progression animation when scanning URLs
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleToggle('appearance', 'showAnimationStage')}
-                  className={cn(
-                    'w-11 h-6 rounded-full transition-colors relative focus:outline-none',
-                    settings.appearance.showAnimationStage ? 'bg-cyan-500' : 'bg-[#1E293B]'
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'w-4 h-4 rounded-full bg-white absolute top-1 transition-transform',
-                      settings.appearance.showAnimationStage ? 'left-6' : 'left-1'
-                    )}
-                  />
-                </button>
-              </div>
-
-              <div className="p-4 flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-200">Compact Dashboard Density</h4>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Condense table row paddings and metrics spacing for high-density monitors
+                    Reduce vertical padding on statistics cards for high-density monitor displays
                   </p>
                 </div>
                 <button
@@ -285,22 +292,22 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* Tab 3: Notification Preferences */}
+        {/* Tab 3: Notifications */}
         {activeTab === 'notifications' && (
           <div className="bg-[#111827] border border-[#263244] rounded-2xl p-6 lg:p-8 shadow-xl space-y-6">
             <div>
-              <h3 className="text-base font-semibold text-slate-100">Notification Alerts</h3>
+              <h3 className="text-base font-semibold text-slate-100">Notification Preferences</h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Configure immediate security alerting thresholds and periodic digests
+                Configure immediate alert dispatches for critical threats
               </p>
             </div>
 
             <div className="divide-y divide-[#263244] rounded-xl border border-[#263244] bg-[#0B1120] overflow-hidden">
               <div className="p-4 flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold text-slate-200">Email on Critical Threat (Risk &gt; 80)</h4>
+                  <h4 className="text-xs font-semibold text-slate-200">Email Notifications for Phishing</h4>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Dispatch immediate notification to SOC responders when an active phishing lure is confirmed
+                    Receive immediate email when a scan reaches Risk Score &gt; 85
                   </p>
                 </div>
                 <button
@@ -321,45 +328,22 @@ export default function SettingsPage() {
 
               <div className="p-4 flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold text-slate-200">Daily Threat Digest</h4>
+                  <h4 className="text-xs font-semibold text-slate-200">Browser In-App Toast Alerts</h4>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Summary of all intercepted URLs, trending impersonated brands, and blocked IP hosts
+                    Display transient notification toasts on scan completion
                   </p>
                 </div>
                 <button
-                  onClick={() => handleToggle('notifications', 'dailyDigest')}
+                  onClick={() => handleToggle('notifications', 'browserAlerts')}
                   className={cn(
                     'w-11 h-6 rounded-full transition-colors relative focus:outline-none',
-                    settings.notifications.dailyDigest ? 'bg-cyan-500' : 'bg-[#1E293B]'
+                    settings.notifications.browserAlerts ? 'bg-cyan-500' : 'bg-[#1E293B]'
                   )}
                 >
                   <span
                     className={cn(
                       'w-4 h-4 rounded-full bg-white absolute top-1 transition-transform',
-                      settings.notifications.dailyDigest ? 'left-6' : 'left-1'
-                    )}
-                  />
-                </button>
-              </div>
-
-              <div className="p-4 flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-200">Weekly Security Intelligence Report</h4>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Consolidated executive compliance report delivered in Markdown and CSV formats
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleToggle('notifications', 'weeklySecurityReport')}
-                  className={cn(
-                    'w-11 h-6 rounded-full transition-colors relative focus:outline-none',
-                    settings.notifications.weeklySecurityReport ? 'bg-cyan-500' : 'bg-[#1E293B]'
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'w-4 h-4 rounded-full bg-white absolute top-1 transition-transform',
-                      settings.notifications.weeklySecurityReport ? 'left-6' : 'left-1'
+                      settings.notifications.browserAlerts ? 'left-6' : 'left-1'
                     )}
                   />
                 </button>
@@ -404,9 +388,9 @@ export default function SettingsPage() {
 
               <div className="p-4 flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold text-slate-200">Auto-Flag Elevated-Abuse TLDs</h4>
+                  <h4 className="text-xs font-semibold text-slate-200">Auto-Flag Suspicious TLDs</h4>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Automatically increase risk baseline for disposable extensions (.xyz, .top, .buzz, .rest)
+                    Extract authoritative DNS and TLD entropy characteristics
                   </p>
                 </div>
                 <button
@@ -424,29 +408,6 @@ export default function SettingsPage() {
                   />
                 </button>
               </div>
-
-              <div className="p-4 flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-200">Strict HTTPS Enforcement</h4>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Flag any plaintext HTTP destination containing authentication keywords with critical penalty
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleToggle('security', 'strictHttpsEnforcement')}
-                  className={cn(
-                    'w-11 h-6 rounded-full transition-colors relative focus:outline-none',
-                    settings.security.strictHttpsEnforcement ? 'bg-cyan-500' : 'bg-[#1E293B]'
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'w-4 h-4 rounded-full bg-white absolute top-1 transition-transform',
-                      settings.security.strictHttpsEnforcement ? 'left-6' : 'left-1'
-                    )}
-                  />
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -454,4 +415,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-

@@ -48,6 +48,32 @@ export interface ScanResult {
     threatType: string;
     heuristicsEngineVersion: string;
   };
+  mlPrediction?: {
+    available: boolean;
+    prediction?: string | null;
+    confidence?: number | null;
+    modelVersion?: string | null;
+    message: string;
+  };
+  threatIntelligence?: {
+    phishtank?: {
+      available: boolean;
+      source?: string;
+      is_phishing?: boolean | null;
+      confidence?: number | null;
+      message?: string;
+      verified_at?: string | null;
+    };
+    openphish?: {
+      available: boolean;
+      source?: string;
+      is_phishing?: boolean | null;
+      confidence?: number | null;
+      message?: string;
+    };
+    has_threat_intel_match: boolean;
+    checked_at?: string;
+  };
   recommendations: string[];
   domainDetails: DomainMetadata;
   isSimulated: boolean;
@@ -140,4 +166,42 @@ export interface UserSettings {
     shareAnonymizedTelemetry: boolean;
   };
 }
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  organization: string;
+  avatarInitials: string;
+  apiKey: string;
+  createdAt: string;
+}
+
+export interface AuthSession {
+  token: string;
+  user: User;
+  expiresAt: number;
+}
+
+export interface LoginCredentials {
+  email: string;
+  password: string;
+  rememberMe?: boolean;
+}
+
+export interface SignupCredentials {
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword?: string;
+  termsAccepted: boolean;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  message?: string;
+  session?: AuthSession;
+}
+
 

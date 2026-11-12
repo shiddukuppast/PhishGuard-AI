@@ -21,6 +21,7 @@ import {
 import { ScanResult } from '@/types';
 import { RiskGauge } from '../scanner/RiskGauge';
 import { downloadReportAsFile } from '@/lib/storage';
+import { reportsApi } from '@/lib/api';
 import { useToast } from './ToastContext';
 import { cn } from '@/lib/utils';
 
@@ -88,12 +89,25 @@ export function ScanDetailModal({ scan, onClose }: ScanDetailModalProps) {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                downloadReportAsFile(scan, 'md');
-                success('Markdown report downloaded');
+              onClick={async () => {
+                try {
+                  const blob = await reportsApi.downloadPdf(scan.id);
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `PhishGuard-Report-${scan.id}.pdf`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  success('Official PDF report downloaded');
+                } catch {
+                  downloadReportAsFile(scan, 'md');
+                  success('Markdown report downloaded');
+                }
               }}
               className="p-2 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-[#162032] border border-transparent hover:border-[#263244] transition-colors"
-              title="Download report"
+              title="Download official PDF report"
             >
               <Download className="w-4 h-4" />
             </button>

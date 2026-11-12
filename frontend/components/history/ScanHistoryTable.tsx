@@ -15,16 +15,18 @@ import {
   AlertTriangle,
   Eye,
   Calendar,
+  Loader2,
 } from 'lucide-react';
 import { ScanResult, Classification } from '@/types';
 import { getClassificationBadge, formatRiskScore, formatDateRelative } from '@/lib/utils';
 import { downloadReportAsFile } from '@/lib/storage';
+import { reportsApi } from '@/lib/api';
 import { useToast } from '../shared/ToastContext';
 import { ScanDetailModal } from '../shared/ScanDetailModal';
 
 interface ScanHistoryTableProps {
   scans: ScanResult[];
-  onDeleteScan?: (scanId: string) => void;
+  onDeleteScan?: (scanId: string) => Promise<void> | void;
   itemsPerPage?: number;
   showFilters?: boolean;
   title?: string;
@@ -43,6 +45,20 @@ export function ScanHistoryTable({
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedScan, setSelectedScan] = useState<ScanResult | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteClick = async (e: React.MouseEvent, scanId: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!onDeleteScan || deletingId) return;
+
+    setDeletingId(scanId);
+    try {
+      await onDeleteScan(scanId);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   // Filter and sort logic
   const filteredScans = useMemo(() => {
@@ -236,9 +252,22 @@ export function ScanHistoryTable({
                         </button>
 
                         <button
-                          onClick={() => {
-                            downloadReportAsFile(scan, 'md');
-                            success('Report downloaded');
+                          onClick={async () => {
+                            try {
+                              const blob = await reportsApi.downloadPdf(scan.id);
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `PhishGuard-Report-${scan.id}.pdf`;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              URL.revokeObjectURL(url);
+                              success('Official PDF downloaded');
+                            } catch {
+                              downloadReportAsFile(scan, 'md');
+                              success('Markdown report downloaded');
+                            }
                           }}
                           className="p-1.5 rounded text-slate-400 hover:text-slate-100 hover:bg-[#0B1120] transition-colors"
                           title="Download report"
@@ -248,14 +277,19 @@ export function ScanHistoryTable({
 
                         {onDeleteScan && (
                           <button
-                            onClick={() => {
-                              onDeleteScan(scan.id);
-                              success('Record removed');
-                            }}
-                            className="p-1.5 rounded text-slate-400 hover:text-red-400 hover:bg-[#0B1120] transition-colors"
-                            title="Remove record"
+                            onClick={(e) => handleDeleteClick(e, scan.id)}
+                            disabled={deletingId === scan.id}
+                            className={`p-1.5 rounded text-slate-400 hover:text-red-400 hover:bg-[#0B1120] transition-colors ${
+                              deletingId === scan.id ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                            title={deletingId === scan.id ? 'Deleting...' : 'Remove record'}
+                            aria-label={`Delete scan record for ${scan.domain}`}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            {deletingId === scan.id ? (
+                              <Loader2 className="w-4 h-4 text-red-400 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
                           </button>
                         )}
                       </div>

@@ -206,64 +206,76 @@ export function ThreatDistributionChart({ data }: { data: ThreatDistributionPoin
       </div>
 
       {/* Donut Chart with Centered Total */}
-      <div className="h-60 w-full relative my-2 flex items-center justify-center">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              innerRadius={65}
-              outerRadius={88}
-              paddingAngle={4}
-              dataKey="value"
-              stroke="#0B1120"
-              strokeWidth={3}
-            >
-              {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              content={({ active, payload }) => {
-                if (active && payload && payload.length) {
-                  const entry = payload[0];
-                  const percentage = ((Number(entry.value) / total) * 100).toFixed(1);
-                  return (
-                    <div className="bg-[#0B1120] border border-[#263244] p-2.5 rounded-lg shadow-xl text-xs font-mono space-y-1">
-                      <p className="text-slate-200 font-bold flex items-center gap-1.5">
-                        <span
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: entry.payload.color }}
-                        />
-                        {entry.name}
-                      </p>
-                      <p className="text-slate-400">
-                        Count: <span className="text-slate-100">{entry.value?.toLocaleString()}</span>
-                      </p>
-                      <p className="text-slate-400">
-                        Share: <span className="text-cyan-400">{percentage}%</span>
-                      </p>
-                    </div>
-                  );
-                }
-                return null;
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-
-        {/* Center label */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-xs font-mono uppercase tracking-wider text-slate-400">Total Scans</span>
-          <span className="text-xl font-bold font-sans text-slate-100">
-            {total.toLocaleString()}
-          </span>
+      {total === 0 ? (
+        <div className="h-60 w-full flex flex-col items-center justify-center text-center p-4 my-2">
+          <div className="w-12 h-12 rounded-full bg-[#0B1120] border border-[#263244] flex items-center justify-center text-slate-500 mb-3">
+            <PieIcon className="w-5 h-5 text-slate-400" />
+          </div>
+          <p className="text-xs font-mono font-medium text-slate-300">No Classification Data</p>
+          <p className="text-[11px] text-slate-500 max-w-xs mt-1 font-mono">
+            Scan your first URL to populate the threat distribution breakdown.
+          </p>
         </div>
-      </div>
+      ) : (
+        <div className="h-60 w-full relative my-2 flex items-center justify-center">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                innerRadius={65}
+                outerRadius={88}
+                paddingAngle={4}
+                dataKey="value"
+                stroke="#0B1120"
+                strokeWidth={3}
+              >
+                {data.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    const entry = payload[0];
+                    const percentage = total > 0 ? ((Number(entry.value) / total) * 100).toFixed(1) : '0.0';
+                    return (
+                      <div className="bg-[#0B1120] border border-[#263244] p-2.5 rounded-lg shadow-xl text-xs font-mono space-y-1">
+                        <p className="text-slate-200 font-bold flex items-center gap-1.5">
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: entry.payload.color }}
+                          />
+                          {entry.name}
+                        </p>
+                        <p className="text-slate-400">
+                          Count: <span className="text-slate-100">{entry.value?.toLocaleString()}</span>
+                        </p>
+                        <p className="text-slate-400">
+                          Share: <span className="text-cyan-400">{percentage}%</span>
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+
+          {/* Center label */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-xs font-mono uppercase tracking-wider text-slate-400">Total Scans</span>
+            <span className="text-xl font-bold font-sans text-slate-100">
+              {total.toLocaleString()}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Legend Breakdown */}
       <div className="pt-3 border-t border-[#263244] space-y-2">
         {data.map((item) => {
-          const pct = ((item.value / total) * 100).toFixed(1);
+          const pct = total > 0 ? ((item.value / total) * 100).toFixed(1) : '0.0';
           return (
             <div key={item.name} className="flex items-center justify-between text-xs font-mono">
               <span className="flex items-center gap-2 text-slate-300">

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import {
   Shield,
   LayoutDashboard,
@@ -42,6 +43,7 @@ const BOTTOM_ITEMS: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -249,25 +251,31 @@ export function Sidebar() {
           </button>
 
           {/* User Profile Card */}
-          <div
+          <Link
+            href="/settings"
             className={cn(
-              'mt-2 pt-2 border-t border-[#263244]/60 flex items-center gap-3 px-2 py-1.5 rounded-lg bg-[#111827]/60',
+              'mt-2 pt-2 border-t border-[#263244]/60 flex items-center gap-3 px-2 py-1.5 rounded-lg bg-[#111827]/60 hover:bg-[#162032] transition-colors group',
               isCollapsed && 'justify-center px-0'
             )}
+            title={user?.name || 'Account Settings'}
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-white font-semibold text-xs shrink-0 ring-1 ring-cyan-500/30">
-              AV
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-white font-semibold text-xs shrink-0 ring-1 ring-cyan-500/30 group-hover:ring-cyan-400">
+              {user?.avatarInitials || 'PG'}
             </div>
             {!isCollapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-slate-200 truncate">Alex Vance</p>
+                <p className="text-xs font-semibold text-slate-200 truncate group-hover:text-cyan-300 transition-colors">
+                  {user?.name || 'Security Analyst'}
+                </p>
                 <div className="flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-[10px] text-slate-400 font-mono truncate">Threat Analyst</span>
+                  <span className="text-[10px] text-slate-400 font-mono truncate">
+                    {user?.role || 'Threat Analyst'}
+                  </span>
                 </div>
               </div>
             )}
-          </div>
+          </Link>
         </div>
       </aside>
 
@@ -297,7 +305,7 @@ export function Sidebar() {
               <div className="p-3 rounded-lg bg-[#0B1120] border border-[#263244] space-y-1.5">
                 <h4 className="text-xs font-mono font-semibold text-cyan-400 uppercase">Detection Pipeline</h4>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  PhishGuard AI evaluates URLs via multi-layered heuristic extraction, lexical token inspection, domain entropy analysis, and simulated Scikit-learn classifier weights.
+                  PhishGuard AI evaluates URLs via multi-layered heuristic extraction, lexical token inspection, domain entropy analysis, and Python FastAPI risk assessment engine with Scikit-learn integration.
                 </p>
               </div>
 

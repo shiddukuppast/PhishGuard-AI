@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ArrowUpRight, ArrowDownRight, Shield, ShieldAlert, CheckCircle2, Target } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Shield, ShieldAlert, CheckCircle2, Target, AlertTriangle, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface StatCardProps {
@@ -10,7 +10,7 @@ export interface StatCardProps {
   trend?: string;
   trendDirection?: 'up' | 'down' | 'neutral';
   trendSubtext?: string;
-  iconName: 'scanned' | 'phishing' | 'safe' | 'rate';
+  iconName: 'scanned' | 'phishing' | 'safe' | 'rate' | 'suspicious' | 'score';
 }
 
 const ICON_MAP = {
@@ -26,6 +26,12 @@ const ICON_MAP = {
     border: 'border-red-500/20',
     color: 'text-red-400',
   },
+  suspicious: {
+    icon: AlertTriangle,
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-500/20',
+    color: 'text-amber-400',
+  },
   safe: {
     icon: CheckCircle2,
     bg: 'bg-emerald-500/10',
@@ -37,6 +43,12 @@ const ICON_MAP = {
     bg: 'bg-blue-500/10',
     border: 'border-blue-500/20',
     color: 'text-blue-400',
+  },
+  score: {
+    icon: Activity,
+    bg: 'bg-purple-500/10',
+    border: 'border-purple-500/20',
+    color: 'text-purple-400',
   },
 };
 

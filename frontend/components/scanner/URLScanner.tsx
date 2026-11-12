@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Search,
   Clipboard,
@@ -14,20 +14,20 @@ import {
   Shield,
   Info,
   ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 import { ScanResult } from '@/types';
-import { analyzeUrlHeuristics } from '@/lib/scanner';
-import { saveScanToStorage } from '@/lib/storage';
+import { scannerApi } from '@/lib/api';
 import { ResultCard } from './ResultCard';
 import { useToast } from '../shared/ToastContext';
 import { cn } from '@/lib/utils';
 
 const SCAN_STAGES = [
-  'Extracting URL characteristics...',
-  'Analyzing domain structure...',
-  'Evaluating security indicators...',
-  'Running ML-based detection...',
-  'Generating risk assessment...',
+  'Extracting URL characteristics & lexical tokens...',
+  'Analyzing host structure & protocol security...',
+  'Evaluating rule-based security indicators...',
+  'Checking ML model availability...',
+  'Generating risk score & forensic recommendations...',
 ];
 
 const PRESET_EXAMPLES = [
@@ -67,6 +67,7 @@ export function URLScanner({
   const { success, error: toastError, info } = useToast();
   const [urlInput, setUrlInput] = useState(initialUrl);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [activeStageIndex, setActiveStageIndex] = useState(0);
   const [currentResult, setCurrentResult] = useState<ScanResult | null>(null);
@@ -79,19 +80,19 @@ export function URLScanner({
       return false;
     }
 
-    // Basic format check: needs at least a domain or protocol
-    // Support formats like "google.com", "http://domain.tld", "192.168.1.1/login"
-    const generalUrlPattern = /^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?(\/.*)?$|^(https?:\/\/)?((\d{1,3}\.){3}\d{1,3})(:\d+)?(\/.*)?$/;
-    
-    // Also allow pseudo-tlds like .test for security testing
+    const generalUrlPattern =
+      /^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?(\/.*)?$|^(https?:\/\/)?((\d{1,3}\.){3}\d{1,3})(:\d+)?(\/.*)?$/;
     const testPattern = /^(https?:\/\/)?[a-zA-Z0-9.-]+\.test(\/.*)?$/;
 
     if (!generalUrlPattern.test(trimmed) && !testPattern.test(trimmed) && !trimmed.includes('.')) {
-      setErrorMessage('Invalid URL format. Please enter a valid domain or web address (e.g., https://example.com).');
+      setErrorMessage(
+        'Invalid URL format. Please enter a valid domain or web address (e.g., https://example.com).'
+      );
       return false;
     }
 
     setErrorMessage(null);
+    setScanError(null);
     return true;
   };
 
@@ -101,6 +102,7 @@ export function URLScanner({
       if (text) {
         setUrlInput(text.trim());
         setErrorMessage(null);
+        setScanError(null);
         info('URL pasted from clipboard');
       }
     } catch {
@@ -111,17 +113,18 @@ export function URLScanner({
   const handleClear = () => {
     setUrlInput('');
     setErrorMessage(null);
+    setScanError(null);
   };
 
-  const executeScan = () => {
+  const executeScan = async () => {
     if (!validateInput(urlInput)) return;
 
     setIsScanning(true);
+    setScanError(null);
     setActiveStageIndex(0);
     setCurrentResult(null);
 
-    // Multi-stage progress simulation
-    const stageDuration = 450; // ms per stage (total ~2.2s for crisp cybersecurity feel)
+    const stageDuration = 350; // ms per stage transition
 
     const interval = setInterval(() => {
       setActiveStageIndex((prev) => {
@@ -134,27 +137,38 @@ export function URLScanner({
       });
     }, stageDuration);
 
-    setTimeout(() => {
-      clearInterval(interval);
-      // Run heuristic analysis
-      const analysisResult = analyzeUrlHeuristics(urlInput);
-      
-      // Persist to storage
-      saveScanToStorage(analysisResult);
+    try {
+      // Execute actual scan against Python FastAPI POST /api/v1/scanner/scan
+      const scanPromise = scannerApi.scanUrl(urlInput.trim());
+      const minProgressDelay = new Promise((resolve) =>
+        setTimeout(resolve, stageDuration * SCAN_STAGES.length)
+      );
 
-      setCurrentResult(analysisResult);
+      const [finalResult] = await Promise.all([scanPromise, minProgressDelay]);
+
+      clearInterval(interval);
+      setCurrentResult(finalResult);
       setIsScanning(false);
-      success('Scan Complete', `Analysis finished for ${analysisResult.domain}`);
+      success('Scan Complete', `Forensic analysis finished for ${finalResult.domain}`);
 
       if (onScanComplete) {
-        onScanComplete(analysisResult);
+        onScanComplete(finalResult);
       }
-    }, stageDuration * SCAN_STAGES.length + 200);
+    } catch (err: any) {
+      clearInterval(interval);
+      setIsScanning(false);
+      const errorMsg =
+        err?.message ||
+        'Failed to connect to the PhishGuard analysis service. Please verify the backend is running at http://127.0.0.1:8000.';
+      setScanError(errorMsg);
+      toastError('Scan Failed', errorMsg);
+    }
   };
 
   const handlePresetSelect = (presetUrl: string) => {
     setUrlInput(presetUrl);
     setErrorMessage(null);
+    setScanError(null);
   };
 
   return (
@@ -166,7 +180,7 @@ export function URLScanner({
           <span>URL Security Scanner</span>
         </h2>
         <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
-          Analyze suspicious URLs and identify potential phishing threats using intelligent security analysis.
+          Analyze suspicious URLs, identify potential phishing threats, and inspect structural anomaly indicators using the PhishGuard AI backend.
         </p>
       </div>
 
@@ -187,6 +201,7 @@ export function URLScanner({
                   onChange={(e) => {
                     setUrlInput(e.target.value);
                     if (errorMessage) setErrorMessage(null);
+                    if (scanError) setScanError(null);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !isScanning) {
@@ -197,39 +212,40 @@ export function URLScanner({
                   disabled={isScanning}
                   className={cn(
                     'w-full pl-11 pr-20 py-3.5 rounded-xl bg-[#0B1120] border text-sm text-slate-100 placeholder-slate-500 font-mono transition-all focus:outline-none disabled:opacity-50',
-                    errorMessage
-                      ? 'border-red-500/60 focus:border-red-400'
+                    errorMessage || scanError
+                      ? 'border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500/30'
                       : 'border-[#263244] focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/30'
                   )}
                 />
 
-                {/* Clear & Paste helpers inside the input */}
-                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                  {urlInput && !isScanning && (
-                    <button
-                      onClick={handleClear}
-                      className="p-1 rounded-md text-slate-500 hover:text-slate-300 hover:bg-[#162032] transition-colors"
-                      title="Clear input"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
+                {/* Clear Button */}
+                {urlInput && !isScanning && (
                   <button
-                    onClick={handlePaste}
-                    disabled={isScanning}
-                    className="p-1.5 rounded-md text-slate-400 hover:text-cyan-400 hover:bg-[#162032] transition-colors"
-                    title="Paste URL"
+                    onClick={handleClear}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-500 hover:text-slate-300 transition-colors"
+                    title="Clear input"
                   >
-                    <Clipboard className="w-4 h-4" />
+                    <X className="w-4 h-4" />
                   </button>
-                </div>
+                )}
               </div>
 
-              {/* Scan URL Primary Action */}
+              {/* Paste from Clipboard Button */}
+              <button
+                onClick={handlePaste}
+                disabled={isScanning}
+                className="px-4 py-3.5 rounded-xl bg-[#162032] hover:bg-[#1E293B] border border-[#263244] text-slate-300 hover:text-white text-xs font-mono transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                title="Paste from clipboard"
+              >
+                <Clipboard className="w-4 h-4 text-slate-400" />
+                <span className="hidden sm:inline">Paste</span>
+              </button>
+
+              {/* Scan Now CTA */}
               <button
                 onClick={executeScan}
-                disabled={isScanning}
-                className="px-6 py-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-[#041C24] font-bold text-sm tracking-wide transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shrink-0 group"
+                disabled={isScanning || !urlInput.trim()}
+                className="px-7 py-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:bg-cyan-500/30 disabled:text-cyan-900/50 text-[#041C24] font-bold text-sm tracking-wide transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2"
               >
                 {isScanning ? (
                   <>
@@ -240,51 +256,63 @@ export function URLScanner({
                   <>
                     <Sparkles className="w-4 h-4" />
                     <span>Scan URL</span>
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                   </>
                 )}
               </button>
             </div>
 
-            {/* Error Message */}
+            {/* Validation Error Banner */}
             {errorMessage && (
-              <div className="flex items-center gap-2 text-red-400 text-xs font-mono pt-1 animate-in fade-in">
+              <div className="flex items-center gap-2 text-xs text-red-400 font-mono mt-2 animate-in fade-in duration-200">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
             )}
-          </div>
 
-          {/* Privacy Notice Requirement */}
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-[#0B1120]/80 border border-[#263244] text-[11px] text-slate-400">
-            <Info className="w-4 h-4 text-cyan-400/80 shrink-0 mt-0.5" />
-            <p className="leading-relaxed">
-              <span className="font-semibold text-slate-300">Privacy Notice:</span> Only scan URLs you are authorized to analyze. Avoid opening suspicious links directly in your personal browser session.
-            </p>
-          </div>
-
-          {/* Quick-test Presets */}
-          <div className="pt-2">
-            <span className="text-[11px] font-mono uppercase text-slate-500 block mb-2">
-              Select verification scenario (sample telemetry):
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-              {PRESET_EXAMPLES.map((preset, idx) => (
+            {/* Backend Scan Network/API Error Banner */}
+            {scanError && (
+              <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start justify-between gap-3 text-xs text-red-300 font-mono mt-2 animate-in fade-in">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <span className="font-bold text-red-200">Analysis Error</span>
+                    <p className="text-[11px] text-red-300/90 leading-relaxed">{scanError}</p>
+                  </div>
+                </div>
                 <button
-                  key={idx}
+                  onClick={executeScan}
+                  className="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 font-mono text-[11px] flex items-center gap-1.5 shrink-0 transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Retry</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Quick Presets / Test Lures */}
+          <div className="pt-2">
+            <div className="flex items-center gap-2 mb-2 text-xs text-slate-400 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+              <span>Or test with a sample security target:</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              {PRESET_EXAMPLES.map((preset, index) => (
+                <button
+                  key={index}
                   onClick={() => handlePresetSelect(preset.url)}
                   disabled={isScanning}
-                  className="p-2.5 rounded-lg bg-[#0B1120] hover:bg-[#162032] border border-[#263244] hover:border-[#384961] text-left transition-all flex flex-col justify-between group disabled:opacity-50"
+                  className="p-2.5 rounded-lg bg-[#0B1120] hover:bg-[#162032] border border-[#263244] hover:border-[#334155] text-left transition-all group flex flex-col justify-between gap-1 disabled:opacity-50"
                 >
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className="text-xs font-medium text-slate-300 group-hover:text-cyan-300 transition-colors truncate">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-slate-200 group-hover:text-cyan-300 transition-colors truncate">
                       {preset.label}
                     </span>
-                    <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded border ${preset.badgeColor}`}>
+                    <span className={cn('text-[9px] font-mono px-1.5 py-0.2 rounded border', preset.badgeColor)}>
                       {preset.type}
                     </span>
                   </div>
-                  <span className="text-[10px] font-mono text-slate-500 truncate block">
+                  <span className="text-[11px] font-mono text-slate-500 truncate block">
                     {preset.url}
                   </span>
                 </button>
@@ -293,80 +321,66 @@ export function URLScanner({
           </div>
         </div>
 
-        {/* Multi-Stage Scanning Process Animation */}
+        {/* Live Multi-Stage Progress Animation */}
         {isScanning && (
-          <div className="mt-6 pt-6 border-t border-[#263244] space-y-4 animate-in fade-in">
+          <div className="mt-6 pt-6 border-t border-[#263244] space-y-4 animate-in fade-in duration-300">
             <div className="flex items-center justify-between text-xs font-mono">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                <span className="text-slate-200 font-semibold">
-                  {SCAN_STAGES[activeStageIndex]}
-                </span>
-              </div>
-              <span className="text-cyan-400">
-                Step {activeStageIndex + 1} of {SCAN_STAGES.length}
+              <span className="text-cyan-400 font-semibold flex items-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Stage {activeStageIndex + 1} of {SCAN_STAGES.length}</span>
+              </span>
+              <span className="text-slate-400">
+                {Math.round(((activeStageIndex + 1) / SCAN_STAGES.length) * 100)}%
               </span>
             </div>
 
-            {/* Progress bar */}
-            <div className="w-full h-1.5 rounded-full bg-[#0B1120] overflow-hidden">
+            {/* Progress Track */}
+            <div className="h-1.5 w-full bg-[#0B1120] rounded-full overflow-hidden border border-[#263244]">
               <div
-                className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300 ease-out"
-                style={{
-                  width: `${((activeStageIndex + 1) / SCAN_STAGES.length) * 100}%`,
-                }}
+                className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${((activeStageIndex + 1) / SCAN_STAGES.length) * 100}%` }}
               />
             </div>
 
-            {/* Stages checklist */}
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 pt-2">
-              {SCAN_STAGES.map((stage, idx) => {
-                const isDone = idx < activeStageIndex;
-                const isCurrent = idx === activeStageIndex;
-
-                return (
-                  <div
-                    key={idx}
-                    className={cn(
-                      'p-2 rounded-lg border text-[11px] font-mono flex items-center gap-2 transition-all',
-                      isDone
-                        ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
-                        : isCurrent
-                        ? 'bg-cyan-950/30 border-cyan-500/40 text-cyan-200'
-                        : 'bg-[#0B1120]/50 border-[#1E293B] text-slate-600'
-                    )}
-                  >
-                    {isDone ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    ) : isCurrent ? (
-                      <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin shrink-0" />
-                    ) : (
-                      <span className="w-3.5 h-3.5 rounded-full border border-slate-700 flex items-center justify-center text-[9px] text-slate-600 shrink-0">
-                        {idx + 1}
-                      </span>
-                    )}
-                    <span className="truncate">{stage.replace('...', '')}</span>
-                  </div>
-                );
-              })}
+            {/* Stage Items */}
+            <div className="space-y-1.5 font-mono text-xs">
+              {SCAN_STAGES.map((stage, idx) => (
+                <div
+                  key={idx}
+                  className={cn(
+                    'flex items-center gap-2 transition-colors',
+                    idx < activeStageIndex
+                      ? 'text-emerald-400'
+                      : idx === activeStageIndex
+                      ? 'text-cyan-300 font-semibold'
+                      : 'text-slate-600'
+                  )}
+                >
+                  {idx < activeStageIndex ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  ) : idx === activeStageIndex ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400 shrink-0" />
+                  ) : (
+                    <span className="w-3.5 h-3.5 rounded-full border border-slate-700 shrink-0" />
+                  )}
+                  <span>{stage}</span>
+                </div>
+              ))}
             </div>
           </div>
         )}
       </div>
 
-      {/* Dynamic Scan Result Component */}
-      {currentResult && (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <ResultCard
-            result={currentResult}
-            onScanAnother={() => {
-              setCurrentResult(null);
-              setUrlInput('');
-            }}
-          />
-        </div>
+      {/* Analysis Result Card */}
+      {currentResult && !isScanning && (
+        <ResultCard
+          result={currentResult}
+          onScanAnother={() => {
+            setCurrentResult(null);
+            setUrlInput('');
+          }}
+        />
       )}
     </div>
   );
 }
-
