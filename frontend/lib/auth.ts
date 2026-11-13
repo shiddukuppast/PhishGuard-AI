@@ -9,7 +9,8 @@
  */
 
 import { User, LoginCredentials, SignupCredentials, AuthResponse } from '@/types';
-import { authApi, setAuthToken } from '@/lib/api';
+import { authApi, setAuthToken, clearAuthTokens } from '@/lib/api';
+import { clearAllClientStorage } from '@/lib/storage';
 
 /**
  * Generate 2-letter uppercase initials from full name
@@ -49,6 +50,10 @@ export const authService = {
    * Authenticate user credentials against FastAPI POST /api/v1/auth/login
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
+    // Purge previous session tokens and cached data to prevent cross-account leakage
+    clearAuthTokens();
+    clearAllClientStorage();
+
     try {
       const res = await authApi.login({
         email: credentials.email,
@@ -93,6 +98,10 @@ export const authService = {
         message: 'You must accept the terms of service to proceed.',
       };
     }
+
+    // Purge previous session tokens and cached data to prevent cross-account leakage
+    clearAuthTokens();
+    clearAllClientStorage();
 
     try {
       const res = await authApi.signup({
@@ -144,15 +153,18 @@ export const authService = {
   },
 
   /**
-   * End session via POST /api/v1/auth/logout
+   * End session via POST /api/v1/auth/logout with complete client-side cache and token eradication
    */
   async logout(): Promise<void> {
+    clearAuthTokens();
+    clearAllClientStorage();
     try {
       await authApi.logout();
     } catch {
       // Ignore network errors on logout
     } finally {
-      setAuthToken(null);
+      clearAuthTokens();
+      clearAllClientStorage();
     }
   },
 };

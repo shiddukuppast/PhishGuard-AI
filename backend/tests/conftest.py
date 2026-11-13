@@ -72,7 +72,7 @@ class MockAsyncCollection:
             ids.append(res.inserted_id)
         return ids
 
-    async def find_one(self, query: Dict[str, Any]):
+    async def find_one(self, query: Dict[str, Any], *args, **kwargs):
         for doc in self.docs:
             if self._match(doc, query):
                 return copy.deepcopy(doc)

@@ -68,11 +68,12 @@ async def scan_url(
 
     now = datetime.now(timezone.utc)
     scan_id = str(ObjectId())
+    user_id_val = str(current_user.id) if current_user and current_user.id else None
 
     # Build DB document
     scan_document = {
         "_id": ObjectId(scan_id),
-        "user_id": current_user.id if current_user else None,
+        "user_id": user_id_val,
         "original_url": char["original_url"],
         "normalized_url": char["normalized_url"],
         "domain": char["domain"],
@@ -97,7 +98,7 @@ async def scan_url(
             # Check for immediate duplicate submission by the same user within 5 seconds
             query = {
                 "original_url": char["original_url"],
-                "user_id": current_user.id if current_user else None,
+                "user_id": user_id_val,
             }
             existing = await db.scans.find_one(query, sort=[("created_at", -1)])
             is_dup = False

@@ -96,15 +96,23 @@ async def get_intelligence_overview():
         "last_checked": now_iso,
     }
 
-    # Query real verified phishing detections from MongoDB
+    # Query real verified phishing detections from threat feeds or public scans (excluding private user scans)
     verified_threats: List[ThreatFeedItemResponse] = []
     total_phishing_count = 0
 
     if db is not None:
         try:
-            total_phishing_count = await db.scans.count_documents({"classification": "PHISHING"})
+            feed_phish_query = {
+                "classification": "PHISHING",
+                "$or": [
+                    {"threat_intelligence.phishtank.is_phishing": True},
+                    {"threat_intelligence.openphish.is_phishing": True},
+                    {"user_id": None},
+                ],
+            }
+            total_phishing_count = await db.scans.count_documents(feed_phish_query)
             cursor = (
-                db.scans.find({"classification": "PHISHING"})
+                db.scans.find(feed_phish_query)
                 .sort([("created_at", -1)])
                 .limit(10)
             )

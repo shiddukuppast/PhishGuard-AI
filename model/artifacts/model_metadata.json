@@ -1,11 +1,11 @@
 {
     "project": "PhishGuard AI",
-    "model_name": "Logistic Regression",
+    "model_name": "Random Forest",
     "dataset": "phishing_features.csv",
-    "training_samples": 128051,
+    "training_samples": 1312,
     "testing_samples": 32013,
     "features_count": 11,
-    "imbalance_handling": "Balanced sample weights",
+    "imbalance_handling": "Random Undersampling",
     "selection_metric": "Macro F1",
     "label_mapping": {
         "0": "0",
@@ -15,6 +15,9 @@
         "Accuracy": 1.0,
         "Macro Precision": 1.0,
         "Macro Recall": 1.0,
-        "Macro F1": 1.0
+        "Macro F1": 1.0,
+        "Minority Recall": 1.0,
+        "ROC-AUC": 1.0,
+        "PR-AUC": 1.0
     }
 }

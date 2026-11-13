@@ -39,7 +39,7 @@ async def list_user_scans(
         )
 
     # Base query restricted strictly to current user's records
-    query: Dict[str, Any] = {"user_id": current_user.id}
+    query: Dict[str, Any] = {"user_id": str(current_user.id)}
 
     # Classification filter
     if classification and classification.upper() != "ALL":
@@ -131,7 +131,7 @@ async def get_scan_detail(
         )
 
     scan_owner = doc.get("user_id")
-    if scan_owner and str(scan_owner) != str(current_user.id):
+    if not scan_owner or str(scan_owner) != str(current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to access this scan record.",
@@ -175,19 +175,19 @@ async def delete_scan(
             detail="Scan record not found.",
         )
 
-    # 2. Verify that the authenticated user owns this record (or unassigned scan)
+    # 2. Verify that the authenticated user strictly owns this record
     scan_owner = scan_doc.get("user_id")
-    if scan_owner and str(scan_owner) != str(current_user.id):
+    if not scan_owner or str(scan_owner) != str(current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to delete this scan record.",
         )
 
-    # 3. Perform the deletion
-    await db.scans.delete_one({"_id": obj_id})
+    # 3. Perform the deletion (strictly scoped by _id and user_id)
+    await db.scans.delete_one({"_id": obj_id, "user_id": str(current_user.id)})
 
-    # 4. Clean up any associated reports
-    await db.reports.delete_many({"scan_id": scan_id})
+    # 4. Clean up any associated reports belonging to this user
+    await db.reports.delete_many({"scan_id": scan_id, "user_id": str(current_user.id)})
 
     return {
         "success": True,

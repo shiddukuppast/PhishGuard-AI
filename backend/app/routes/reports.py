@@ -45,13 +45,20 @@ async def create_report(
             detail="Referenced scan record not found.",
         )
 
+    scan_owner = scan_doc.get("user_id")
+    if not scan_owner or str(scan_owner) != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to generate reports for this scan record.",
+        )
+
     # Convert ObjectId to string
     scan_doc["id"] = str(scan_doc["_id"])
     del scan_doc["_id"]
 
     now = datetime.now(timezone.utc)
     report_doc = {
-        "user_id": current_user.id,
+        "user_id": str(current_user.id),
         "scan_id": req.scan_id,
         "report_data": scan_doc,
         "created_at": now,
@@ -62,7 +69,7 @@ async def create_report(
 
     return ReportResponse(
         id=report_id_str,
-        user_id=current_user.id or "",
+        user_id=str(current_user.id),
         scan_id=req.scan_id,
         report_data=scan_doc,
         created_at=now,
@@ -95,7 +102,7 @@ async def list_reports(current_user: UserModel = Depends(get_current_user)):
     if db is None:
         return ReportListResponse(reports=[], total=0)
 
-    cursor = db.reports.find({"user_id": current_user.id}).sort([("created_at", -1)])
+    cursor = db.reports.find({"user_id": str(current_user.id)}).sort([("created_at", -1)])
     reports_list = []
 
     async for doc in cursor:
@@ -130,7 +137,7 @@ async def get_report(
     report_id: str,
     current_user: UserModel = Depends(get_current_user),
 ):
-    """Retrieve report information by report ID."""
+    """Retrieve report information by report ID with strict user isolation."""
     db = get_db()
     if db is None:
         raise HTTPException(
@@ -138,50 +145,62 @@ async def get_report(
             detail="Database service is unavailable.",
         )
 
-    doc = None
+    # 1. Look for report by ObjectId
+    existing_report = None
     try:
         report_obj_id = ObjectId(report_id)
-        doc = await db.reports.find_one({"_id": report_obj_id, "user_id": current_user.id})
+        existing_report = await db.reports.find_one({"_id": report_obj_id})
     except Exception:
         pass
 
-    # Fallback 1: check if report_id was stored as scan_id
-    if not doc:
-        doc = await db.reports.find_one({"scan_id": report_id, "user_id": current_user.id})
+    # 2. Look for report by scan_id
+    if not existing_report:
+        existing_report = await db.reports.find_one({"scan_id": report_id})
 
-    # Fallback 2: check if report_id is a scan ID belonging to user, generate on-demand
-    if not doc:
-        try:
-            scan_obj = ObjectId(report_id)
-            scan_doc = await db.scans.find_one({"_id": scan_obj, "user_id": current_user.id})
-            if scan_doc:
-                scan_doc["id"] = str(scan_doc["_id"])
-                del scan_doc["_id"]
-                pdf_buffer = ReportService.generate_pdf_report(scan_doc)
-                filename = f"PhishGuard-Report-{report_id}.pdf"
-                return StreamingResponse(
-                    pdf_buffer,
-                    media_type="application/pdf",
-                    headers={
-                        "Content-Disposition": f"attachment; filename={filename}",
-                        "Cache-Control": "no-cache",
-                    },
-                )
-        except Exception:
-            pass
-
-    if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report or scan record not found or access denied.",
+    if existing_report:
+        if str(existing_report.get("user_id")) != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access this report.",
+            )
+        return ReportResponse(
+            id=str(existing_report["_id"]),
+            user_id=str(existing_report.get("user_id", "")),
+            scan_id=existing_report.get("scan_id", ""),
+            report_data=existing_report.get("report_data", {}),
+            created_at=existing_report.get("created_at", datetime.now(timezone.utc)),
         )
 
-    return ReportResponse(
-        id=str(doc["_id"]),
-        user_id=doc.get("user_id", ""),
-        scan_id=doc.get("scan_id", ""),
-        report_data=doc.get("report_data", {}),
-        created_at=doc.get("created_at", datetime.now(timezone.utc)),
+    # 3. Fallback: check if report_id is a scan ID belonging to the user
+    try:
+        scan_obj = ObjectId(report_id)
+        scan_doc = await db.scans.find_one({"_id": scan_obj})
+        if scan_doc:
+            if not scan_doc.get("user_id") or str(scan_doc.get("user_id")) != str(current_user.id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have permission to access this scan record.",
+                )
+            scan_doc["id"] = str(scan_doc["_id"])
+            del scan_doc["_id"]
+            pdf_buffer = ReportService.generate_pdf_report(scan_doc)
+            filename = f"PhishGuard-Report-{report_id}.pdf"
+            return StreamingResponse(
+                pdf_buffer,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "Cache-Control": "no-cache",
+                },
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Report or scan record not found.",
     )
 
 
@@ -199,7 +218,7 @@ async def download_pdf_report(
     report_id: str,
     current_user: UserModel = Depends(get_current_user),
 ):
-    """Generate and stream a downloadable PDF report using ReportLab."""
+    """Generate and stream a downloadable PDF report strictly for the owner."""
     db = get_db()
     if db is None:
         raise HTTPException(
@@ -207,56 +226,66 @@ async def download_pdf_report(
             detail="Database service is unavailable.",
         )
 
-    doc = None
+    existing_report = None
     try:
         report_obj_id = ObjectId(report_id)
-        doc = await db.reports.find_one({"_id": report_obj_id, "user_id": current_user.id})
+        existing_report = await db.reports.find_one({"_id": report_obj_id})
     except Exception:
         pass
 
-    # Fallback 1: check if report_id was stored as scan_id
-    if not doc:
-        doc = await db.reports.find_one({"scan_id": report_id, "user_id": current_user.id})
+    if not existing_report:
+        existing_report = await db.reports.find_one({"scan_id": report_id})
 
-    # Fallback 2: check if report_id is a scan ID belonging to user, generate on-demand
-    if not doc:
-        try:
-            scan_obj = ObjectId(report_id)
-            scan_doc = await db.scans.find_one({"_id": scan_obj, "user_id": current_user.id})
-            if scan_doc:
-                scan_doc["id"] = str(scan_doc["_id"])
-                del scan_doc["_id"]
-                pdf_buffer = ReportService.generate_pdf_report(scan_doc)
-                filename = f"PhishGuard-Report-{report_id}.pdf"
-                return StreamingResponse(
-                    pdf_buffer,
-                    media_type="application/pdf",
-                    headers={
-                        "Content-Disposition": f"attachment; filename={filename}",
-                        "Cache-Control": "no-cache",
-                    },
-                )
-        except Exception:
-            pass
+    if existing_report:
+        if str(existing_report.get("user_id")) != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to download this report.",
+            )
+        scan_data = existing_report.get("report_data", {})
+        scan_data["id"] = existing_report.get("scan_id")
 
-    if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report or scan record not found or access denied.",
+        pdf_buffer = ReportService.generate_pdf_report(scan_data)
+        filename = f"PhishGuard-Report-{report_id}.pdf"
+
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Cache-Control": "no-cache",
+            },
         )
 
-    scan_data = doc.get("report_data", {})
-    scan_data["id"] = doc.get("scan_id")
+    # Check if report_id is a scan ID
+    try:
+        scan_obj = ObjectId(report_id)
+        scan_doc = await db.scans.find_one({"_id": scan_obj})
+        if scan_doc:
+            if not scan_doc.get("user_id") or str(scan_doc.get("user_id")) != str(current_user.id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have permission to download reports for this scan.",
+                )
+            scan_doc["id"] = str(scan_doc["_id"])
+            del scan_doc["_id"]
+            pdf_buffer = ReportService.generate_pdf_report(scan_doc)
+            filename = f"PhishGuard-Report-{report_id}.pdf"
+            return StreamingResponse(
+                pdf_buffer,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "Cache-Control": "no-cache",
+                },
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass
 
-    pdf_buffer = ReportService.generate_pdf_report(scan_data)
-    filename = f"PhishGuard-Report-{report_id}.pdf"
-
-    return StreamingResponse(
-        pdf_buffer,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}",
-            "Cache-Control": "no-cache",
-        },
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Report or scan record not found.",
     )
 

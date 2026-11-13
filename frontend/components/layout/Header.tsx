@@ -53,11 +53,11 @@ export function Header({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    info('Logged Out', 'Your security session has ended.');
+  const handleLogout = async () => {
     setShowProfileMenu(false);
-    router.replace('/');
+    await logout();
+    info('Logged Out', 'Your security session has ended.');
+    router.replace('/login');
   };
 
   // Formatted current date

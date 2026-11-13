@@ -10,8 +10,10 @@ import { ScanResult, ActivityDataPoint } from '@/types';
 import Link from 'next/link';
 import { ShieldCheck, Sparkles, ArrowRight, ShieldAlert, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/shared/ToastContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function DashboardPage() {
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { success, error: toastError } = useToast();
   const [recentScans, setRecentScans] = useState<ScanResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,6 +34,26 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let isMounted = true;
+
+    if (isAuthLoading) {
+      return;
+    }
+
+    if (!isAuthenticated || !user) {
+      setRecentScans([]);
+      setStats({
+        totalScans: 0,
+        phishingDetected: 0,
+        suspiciousDetected: 0,
+        safeWebsites: 0,
+        averageRiskScore: 0.0,
+        detectionRate: 0.0,
+        trends: { scanned: '0', phishing: '0', safe: '0' },
+      });
+      setActivityData([]);
+      setIsLoading(false);
+      return;
+    }
 
     async function loadDashboardData() {
       setIsLoading(true);
@@ -84,6 +106,8 @@ export default function DashboardPage() {
 
         if (recentRes.status === 'fulfilled' && Array.isArray(recentRes.value)) {
           setRecentScans(recentRes.value);
+        } else {
+          setRecentScans([]);
         }
       } catch (err) {
         console.error('Failed loading dashboard metrics:', err);
@@ -99,7 +123,7 @@ export default function DashboardPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [user?.id, isAuthenticated, isAuthLoading]);
 
   const handleDeleteScan = async (id: string) => {
     try {

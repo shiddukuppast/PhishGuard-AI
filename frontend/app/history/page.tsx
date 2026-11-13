@@ -7,6 +7,7 @@ import { ScanHistoryTable } from '@/components/history/ScanHistoryTable';
 import { historyApi } from '@/lib/api';
 import { ScanResult } from '@/types';
 import { useToast } from '@/components/shared/ToastContext';
+import { useAuth } from '@/context/AuthContext';
 import {
   History,
   RotateCcw,
@@ -19,12 +20,20 @@ import {
 } from 'lucide-react';
 
 export default function HistoryPage() {
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { success, error: toastError } = useToast();
   const [scans, setScans] = useState<ScanResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchHistory = useCallback(async () => {
+    if (isAuthLoading) return;
+    if (!isAuthenticated || !user) {
+      setScans([]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setFetchError(null);
     try {
@@ -37,11 +46,11 @@ export default function HistoryPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isAuthLoading, isAuthenticated, user]);
 
   useEffect(() => {
     fetchHistory();
-  }, [fetchHistory]);
+  }, [fetchHistory, user?.id, isAuthenticated, isAuthLoading]);
 
   const handleDelete = async (id: string) => {
     try {

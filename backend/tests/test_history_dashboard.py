@@ -111,6 +111,12 @@ async def test_dashboard_stats_and_activity(client, registered_user, mock_db):
         "created_at": now,
     })
 
+    # Login as registered_user
+    await client.post(
+        "/api/v1/auth/login",
+        json={"email": "alex.vance@defense-ops.sec", "password": "PhishGuard2026!"},
+    )
+
     # Stats
     stats_resp = await client.get("/api/v1/dashboard/stats")
     assert stats_resp.status_code == 200

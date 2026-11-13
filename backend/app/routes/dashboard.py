@@ -10,7 +10,7 @@ from app.schemas.dashboard import (
     DashboardRecentScansResponse,
     RecentScanItem,
 )
-from app.utils.dependencies import get_optional_current_user
+from app.utils.dependencies import get_current_user
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -22,11 +22,11 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
     summary="Dashboard Overview Metrics",
 )
 async def get_dashboard_stats(
-    current_user: Optional[UserModel] = Depends(get_optional_current_user),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
-    Calculate dynamic security metrics from real MongoDB scan records.
-    Filters by user if authenticated, or system totals for guest overview.
+    Calculate dynamic security metrics strictly from current user's MongoDB scan records.
+    Requires authentication to guarantee complete user isolation.
     """
     db = get_db()
     if db is None:
@@ -41,8 +41,8 @@ async def get_dashboard_stats(
             trends={"scanned": "+0%", "phishing": "+0%", "safe": "+0%"},
         )
 
-    # Filter query: if user is logged in, show user's stats; if none, show all scans
-    match_query: Dict[str, Any] = {"user_id": current_user.id} if current_user else {}
+    # Filter query: strictly isolated to the authenticated user's records
+    match_query: Dict[str, Any] = {"user_id": str(current_user.id)}
 
     # Aggregation for counts by classification and average score
     pipeline = [
@@ -97,10 +97,10 @@ async def get_dashboard_stats(
     summary="7-Day Threat Activity Stream",
 )
 async def get_dashboard_activity(
-    current_user: Optional[UserModel] = Depends(get_optional_current_user),
+    current_user: UserModel = Depends(get_current_user),
 ):
     """
-    Return rolling 7-day scan activity grouped by day from actual MongoDB records.
+    Return rolling 7-day scan activity strictly for the authenticated user.
     """
     now = datetime.now(timezone.utc)
     # Generate past 7 day keys formatted as 'MMM DD'
@@ -112,9 +112,10 @@ async def get_dashboard_activity(
     activity_map = {lbl: {"phishing": 0, "suspicious": 0, "safe": 0, "total": 0} for lbl in day_labels}
 
     if db is not None:
-        match_query: Dict[str, Any] = {"created_at": {"$gte": day_start}}
-        if current_user:
-            match_query["user_id"] = current_user.id
+        match_query: Dict[str, Any] = {
+            "user_id": str(current_user.id),
+            "created_at": {"$gte": day_start},
+        }
 
         cursor = db.scans.find(match_query, {"created_at": 1, "classification": 1})
         async for doc in cursor:
@@ -153,14 +154,14 @@ async def get_dashboard_activity(
     summary="Recent Analyzed URLs",
 )
 async def get_dashboard_recent_scans(
-    current_user: Optional[UserModel] = Depends(get_optional_current_user),
+    current_user: UserModel = Depends(get_current_user),
 ):
-    """Return the most recent analyzed URLs."""
+    """Return the most recent analyzed URLs strictly for the authenticated user."""
     db = get_db()
     if db is None:
         return DashboardRecentScansResponse(recent_scans=[])
 
-    match_query: Dict[str, Any] = {"user_id": current_user.id} if current_user else {}
+    match_query: Dict[str, Any] = {"user_id": str(current_user.id)}
     cursor = db.scans.find(match_query).sort([("created_at", -1)]).limit(6)
 
     recent = []

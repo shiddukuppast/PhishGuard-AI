@@ -202,3 +202,18 @@ ${(scan.recommendations || []).map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/**
+ * Completely purges all client-side cached data (scans, reports, settings).
+ * Enforces zero leakage of user data on logout or account switching.
+ */
+export function clearAllClientStorage(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(SCANS_STORAGE_KEY);
+    localStorage.removeItem(SETTINGS_STORAGE_KEY);
+    localStorage.removeItem(REPORTS_STORAGE_KEY);
+  } catch (err) {
+    console.error('Failed clearing client storage', err);
+  }
+}

@@ -19,10 +19,12 @@ import {
 import { GeneratedReport, ScanResult } from '@/types';
 import { reportsApi, historyApi } from '@/lib/api';
 import { useToast } from '@/components/shared/ToastContext';
+import { useAuth } from '@/context/AuthContext';
 import { ScanDetailModal } from '@/components/shared/ScanDetailModal';
 import { cn } from '@/lib/utils';
 
 export default function ReportsPage() {
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { success, error: toastError, info } = useToast();
   const [reports, setReports] = useState<GeneratedReport[]>([]);
   const [recentScans, setRecentScans] = useState<ScanResult[]>([]);
@@ -32,6 +34,14 @@ export default function ReportsPage() {
   const [selectedScanForModal, setSelectedScanForModal] = useState<ScanResult | null>(null);
 
   const fetchReportsAndScans = useCallback(async () => {
+    if (isAuthLoading) return;
+    if (!isAuthenticated || !user) {
+      setReports([]);
+      setRecentScans([]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const [reportsRes, historyRes] = await Promise.allSettled([
@@ -41,20 +51,24 @@ export default function ReportsPage() {
 
       if (reportsRes.status === 'fulfilled') {
         setReports(reportsRes.value.reports || []);
+      } else {
+        setReports([]);
       }
       if (historyRes.status === 'fulfilled') {
         setRecentScans(historyRes.value.scans || []);
+      } else {
+        setRecentScans([]);
       }
     } catch (err: any) {
       console.error('Failed loading reports:', err);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isAuthLoading, isAuthenticated, user]);
 
   useEffect(() => {
     fetchReportsAndScans();
-  }, [fetchReportsAndScans]);
+  }, [fetchReportsAndScans, user?.id, isAuthenticated, isAuthLoading]);
 
   const handleGenerateReport = async (scanId: string) => {
     setIsGenerating(true);

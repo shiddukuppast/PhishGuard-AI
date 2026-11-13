@@ -45,6 +45,22 @@ export function setAuthToken(token: string | null): void {
 }
 
 /**
+ * Completely purges all session authorization tokens and resets in-memory cache.
+ * Guarantees that subsequent requests do not send stale user credentials.
+ */
+export function clearAuthTokens(): void {
+  inMemoryAuthToken = null;
+  if (typeof window !== 'undefined') {
+    try {
+      sessionStorage.removeItem(SESSION_TOKEN_KEY);
+      sessionStorage.clear();
+    } catch {
+      // Storage unavailable or disabled
+    }
+  }
+}
+
+/**
  * Retrieve the current JWT authorization token from memory or sessionStorage.
  */
 export function getAuthToken(): string | null {
