@@ -90,6 +90,9 @@ def test_sample_url_prediction_inference():
     assert benign_result["prediction"] in ("LEGITIMATE", "PHISHING")
     assert isinstance(benign_result["confidence"], float)
     assert 0.0 <= benign_result["confidence"] <= 1.0
+    assert "phishing_probability" in benign_result
+    if benign_result["phishing_probability"] is not None:
+        assert 0.0 <= benign_result["phishing_probability"] <= 1.0
     assert benign_result["features_evaluated"] == 11
     assert "model_version" in benign_result
 
@@ -103,6 +106,9 @@ def test_sample_url_prediction_inference():
     assert suspicious_result["prediction"] in ("LEGITIMATE", "PHISHING")
     assert isinstance(suspicious_result["confidence"], float)
     assert 0.0 <= suspicious_result["confidence"] <= 1.0
+    assert "phishing_probability" in suspicious_result
+    if suspicious_result["phishing_probability"] is not None:
+        assert 0.0 <= suspicious_result["phishing_probability"] <= 1.0
     assert suspicious_result["features_evaluated"] == 11
 
 

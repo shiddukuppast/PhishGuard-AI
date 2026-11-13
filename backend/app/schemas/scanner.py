@@ -35,6 +35,7 @@ class MLAnalysisResponse(BaseModel):
     available: bool
     prediction: Optional[str] = None  # "LEGITIMATE", "SUSPICIOUS", "PHISHING"
     confidence: Optional[float] = None
+    phishing_probability: Optional[float] = None
     model_version: Optional[str] = None
     message: str
 

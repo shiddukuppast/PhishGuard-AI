@@ -214,8 +214,14 @@ export function mapBackendScanToFrontend(backendScan: any): ScanResult {
   );
 
   const chars = backendScan.url_characteristics || {};
-  const ml = backendScan.model_prediction || {};
+  const ml = backendScan.model_prediction || backendScan.ml_analysis || {};
   const ti = backendScan.threat_intelligence || {};
+  const phishingProb =
+    typeof ml.phishing_probability === 'number'
+      ? ml.phishing_probability
+      : typeof backendScan.phishing_probability === 'number'
+      ? backendScan.phishing_probability
+      : null;
 
   return {
     id: backendScan.id || backendScan.scan_id || `scan_${Date.now()}`,
@@ -249,6 +255,7 @@ export function mapBackendScanToFrontend(backendScan: any): ScanResult {
       available: Boolean(ml.available),
       prediction: ml.prediction ?? null,
       confidence: ml.confidence ?? null,
+      phishingProbability: phishingProb,
       modelVersion: ml.model_version ?? null,
       message:
         ml.message ||
@@ -392,6 +399,7 @@ export const historyApi = {
     limit?: number;
     search?: string;
     classification?: string;
+    riskLevel?: string;
     sortBy?: string;
     order?: string;
   }) {
@@ -401,6 +409,9 @@ export const historyApi = {
     if (params?.search) query.set('search', params.search);
     if (params?.classification && params.classification !== 'ALL') {
       query.set('classification', params.classification);
+    }
+    if (params?.riskLevel && params.riskLevel !== 'ALL') {
+      query.set('risk_level', params.riskLevel);
     }
     if (params?.sortBy) query.set('sort_by', params.sortBy);
     if (params?.order) query.set('order', params.order);

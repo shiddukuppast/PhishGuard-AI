@@ -21,6 +21,7 @@ async def list_user_scans(
     limit: int = Query(10, ge=1, le=100, description="Items per page"),
     search: Optional[str] = Query(None, description="Search domain or URL"),
     classification: Optional[str] = Query(None, description="Filter by LEGITIMATE, SUSPICIOUS, or PHISHING"),
+    risk_level: Optional[str] = Query(None, description="Filter by LOW, MEDIUM, HIGH, or CRITICAL"),
     start_date: Optional[str] = Query(None, description="ISO start date filter"),
     end_date: Optional[str] = Query(None, description="ISO end date filter"),
     sort_by: str = Query("created_at", description="Sort by 'created_at' or 'risk_score'"),
@@ -43,6 +44,10 @@ async def list_user_scans(
     # Classification filter
     if classification and classification.upper() != "ALL":
         query["classification"] = classification.upper()
+
+    # Risk level filter
+    if risk_level and risk_level.upper() != "ALL":
+        query["risk_level"] = risk_level.upper()
 
     # Search filter across url or domain
     if search:

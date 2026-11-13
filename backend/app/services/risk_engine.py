@@ -119,13 +119,36 @@ class RiskEngine:
         if ml_available:
             pred = ml_result.get("prediction", "")
             conf = ml_result.get("confidence") or 0.5
+            phishing_prob = ml_result.get("phishing_probability")
+            if phishing_prob is None:
+                phishing_prob = conf if pred == "PHISHING" else (1.0 - conf)
+
             if pred == "PHISHING":
-                score = max(score, int(70 + conf * 25))
-                flag_reasons.append(f"Machine learning classification model flagged URL as PHISHING (confidence: {conf:.1%}).")
-            elif pred == "LEGITIMATE" and conf > 0.85:
-                # Moderate score downward if ML is strongly confident legitimate AND no IP or threat intel hit
-                if not has_ip and not ti_phish_found and not impersonated_brands:
-                    score = min(score, 25)
+                # Calibrated additive penalty based on probability
+                ml_penalty = int(20 + phishing_prob * 20)  # +20 to +40 points
+                score += ml_penalty
+
+                # Corroborated escalation: only jump to High (>=65) or Critical (>=81)
+                # if substantiated by structural heuristic anomalies or high probability
+                has_corroborating_risk = (
+                    has_ip or bool(impersonated_brands) or bool(matched_tld) or
+                    bool(suspicious_keywords_list) or has_at_symbol or not has_https
+                )
+                if has_corroborating_risk and phishing_prob >= 0.70:
+                    score = max(score, 65)  # Elevated to High
+                if has_corroborating_risk and phishing_prob >= 0.85 and (has_ip or len(suspicious_keywords_list) > 1 or ti_phish_found):
+                    score = max(score, 85)  # Elevated to Critical
+
+                flag_reasons.append(
+                    f"Machine learning model flagged URL as PHISHING "
+                    f"(probability: {phishing_prob:.1%}, confidence: {conf:.1%})."
+                )
+            elif pred == "LEGITIMATE" and conf > 0.75:
+                # Moderate score downward if ML is confident legitimate and no critical heuristic threats exist
+                if not has_ip and not ti_phish_found and not impersonated_brands and not has_at_symbol:
+                    score = max(5, int(score * 0.75))
+                    if conf > 0.85 and score <= 35:
+                        score = min(score, 25)  # Preserve Low risk range for safe sites
 
         # -------------------------------------------------------------
         # 4. Benign Domain Calibration

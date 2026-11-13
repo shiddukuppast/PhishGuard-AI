@@ -52,6 +52,7 @@ export interface ScanResult {
     available: boolean;
     prediction?: string | null;
     confidence?: number | null;
+    phishingProbability?: number | null;
     modelVersion?: string | null;
     message: string;
   };

@@ -80,6 +80,7 @@ async def scan_url(
         "risk_score": risk_score,
         "risk_level": risk_level,
         "confidence": ml_result.get("confidence"),
+        "phishing_probability": ml_result.get("phishing_probability"),
         "model_prediction": ml_result,
         "security_indicators": [ind.model_dump() for ind in indicators],
         "threat_intelligence": threat_intel,
@@ -93,7 +94,21 @@ async def scan_url(
     db = get_db()
     if db is not None:
         try:
-            await db.scans.insert_one(scan_document)
+            # Check for immediate duplicate submission by the same user within 5 seconds
+            query = {
+                "original_url": char["original_url"],
+                "user_id": current_user.id if current_user else None,
+            }
+            existing = await db.scans.find_one(query, sort=[("created_at", -1)])
+            is_dup = False
+            if existing and existing.get("created_at"):
+                time_diff = (now - existing["created_at"].replace(tzinfo=timezone.utc)).total_seconds()
+                if 0 <= time_diff < 5:
+                    is_dup = True
+                    scan_id = str(existing["_id"])
+
+            if not is_dup:
+                await db.scans.insert_one(scan_document)
         except Exception as exc:
             # If insert fails, log but do not prevent returning scan result to user
             pass
@@ -111,6 +126,7 @@ async def scan_url(
             available=ml_result["available"],
             prediction=ml_result.get("prediction"),
             confidence=ml_result.get("confidence"),
+            phishing_probability=ml_result.get("phishing_probability"),
             model_version=ml_result.get("model_version"),
             message=ml_result["message"],
         ),

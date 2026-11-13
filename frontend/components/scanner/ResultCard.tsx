@@ -200,10 +200,19 @@ export function ResultCard({ result, onScanAnother }: ResultCardProps) {
               {result.mlPrediction?.message ||
                 'Machine learning analysis is currently unavailable. This result is based on the available URL security checks.'}
             </p>
-            {result.mlPrediction?.available && typeof result.mlPrediction.confidence === 'number' && (
-              <span className="text-[11px] font-mono text-cyan-400 block pt-0.5">
-                Model Confidence: {(result.mlPrediction.confidence * 100).toFixed(1)}%
-              </span>
+            {result.mlPrediction?.available && (
+              <div className="flex flex-col gap-0.5 pt-0.5">
+                {typeof result.mlPrediction.phishingProbability === 'number' && (
+                  <span className="text-[11px] font-mono text-cyan-400 block">
+                    Phishing Probability: {(result.mlPrediction.phishingProbability * 100).toFixed(1)}%
+                  </span>
+                )}
+                {typeof result.mlPrediction.confidence === 'number' && (
+                  <span className="text-[11px] font-mono text-slate-400 block">
+                    Confidence: {(result.mlPrediction.confidence * 100).toFixed(1)}%
+                  </span>
+                )}
+              </div>
             )}
           </div>
 

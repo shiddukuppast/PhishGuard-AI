@@ -176,6 +176,49 @@ export function ScanDetailModal({ scan, onClose }: ScanDetailModalProps) {
                   </div>
 
                   <div className="p-4 rounded-xl bg-[#0B1120] border border-[#263244] space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-semibold text-slate-200 uppercase font-mono">
+                        Machine Learning Model
+                      </h4>
+                      <span
+                        className={cn(
+                          'text-[10px] font-mono px-2 py-0.5 rounded border font-semibold',
+                          scan.mlPrediction?.available
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            : 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                        )}
+                      >
+                        {scan.mlPrediction?.available ? 'INFERENCE ACTIVE' : 'MODEL UNAVAILABLE'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-1">
+                      <div>
+                        <span className="text-slate-500 block text-[10px]">PREDICTION</span>
+                        <span className="text-slate-200 font-semibold">
+                          {scan.mlPrediction?.prediction || 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[10px]">PHISHING PROBABILITY</span>
+                        <span className="text-cyan-400 font-semibold">
+                          {typeof scan.mlPrediction?.phishingProbability === 'number'
+                            ? `${(scan.mlPrediction.phishingProbability * 100).toFixed(1)}%`
+                            : typeof scan.mlPrediction?.confidence === 'number'
+                            ? `${(scan.mlPrediction.confidence * 100).toFixed(1)}%`
+                            : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {scan.mlPrediction?.message && (
+                      <p className="text-[11px] text-slate-400 pt-1 border-t border-[#263244]/60">
+                        {scan.mlPrediction.message}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-[#0B1120] border border-[#263244] space-y-2">
                     <h4 className="text-xs font-semibold text-slate-200 uppercase font-mono">
                       Threat Persona
                     </h4>

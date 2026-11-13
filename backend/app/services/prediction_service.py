@@ -30,10 +30,10 @@ CANONICAL_FEATURE_NAMES: List[str] = [
     "num_subdirs",
     "num_params",
     "suspicious_words",
+    "tld",
     "special_char_count",
     "digits_count",
     "entropy",
-    "tld",
 ]
 
 
@@ -101,7 +101,13 @@ class PredictionService:
             feature_names_path = os.path.join(base_dir, "feature_names.json")
             if os.path.exists(feature_names_path):
                 with open(feature_names_path, "r", encoding="utf-8") as f:
-                    self.feature_names = json.load(f)
+                    fn_data = json.load(f)
+                if isinstance(fn_data, dict):
+                    self.feature_names = fn_data.get("features", CANONICAL_FEATURE_NAMES)
+                elif isinstance(fn_data, list):
+                    self.feature_names = fn_data
+                else:
+                    self.feature_names = CANONICAL_FEATURE_NAMES
                 logger.info("Loaded %d feature names from %s", len(self.feature_names), feature_names_path)
             else:
                 self.feature_names = CANONICAL_FEATURE_NAMES
@@ -112,7 +118,8 @@ class PredictionService:
                     self.metadata = json.load(f)
 
             self.is_loaded = True
-            self.status_message = "ML model loaded successfully and ready for inference."
+            model_algo = self.metadata.get("model_name") or self.metadata.get("algorithm") or "Scikit-learn Model"
+            self.status_message = f"ML model ({model_algo}) loaded successfully and ready for inference."
             logger.info("ML Model status: %s", self.status_message)
             return True
 
@@ -125,11 +132,12 @@ class PredictionService:
 
     def get_status(self) -> Dict[str, Any]:
         """Return diagnostic status of the ML prediction subsystem."""
+        algorithm_name = self.metadata.get("model_name") or self.metadata.get("algorithm") or ("Model Loaded" if self.is_loaded else None)
         return {
             "available": self.is_loaded,
             "model_path": self.resolved_model_path or self.model_path,
             "model_version": self.metadata.get("version", "1.0.0" if self.is_loaded else None),
-            "algorithm": self.metadata.get("algorithm", "Random Forest" if self.is_loaded else None),
+            "algorithm": algorithm_name,
             "features_count": len(self.feature_names) if self.feature_names else 0,
             "message": self.status_message,
         }
@@ -159,25 +167,33 @@ class PredictionService:
             X_df = pd.DataFrame([row_dict])
 
             # Ensure columns are in the exact order expected
-            feature_order = self.feature_names if self.feature_names else CANONICAL_FEATURE_NAMES
+            feature_order = self.feature_names if isinstance(self.feature_names, list) else CANONICAL_FEATURE_NAMES
             X_df = X_df[feature_order]
 
             raw_prediction = self.model.predict(X_df)[0]
 
             # Normalize output to canonical string label
-            if isinstance(raw_prediction, (int, np.integer)):
-                pred_label = "PHISHING" if int(raw_prediction) == 1 else "LEGITIMATE"
+            # 0 -> LEGITIMATE, 1 -> PHISHING
+            label_map = self.metadata.get("label_mapping", {})
+            raw_str = str(raw_prediction)
+            if raw_str in label_map and label_map[raw_str] in ("LEGITIMATE", "PHISHING"):
+                pred_label = label_map[raw_str]
+            elif raw_str == "1":
+                pred_label = "PHISHING"
+            elif raw_str == "0":
+                pred_label = "LEGITIMATE"
             else:
                 pred_label = str(raw_prediction).upper()
 
-            # Confidence estimation via predict_proba
+            # Confidence and phishing probability estimation via predict_proba
             confidence = None
             phishing_probability = None
             if hasattr(self.model, "predict_proba"):
                 try:
                     probas = self.model.predict_proba(X_df)[0]
                     classes = list(self.model.classes_)
-                    # Confidence is probability assigned to the predicted class
+
+                    # Confidence: probability assigned to the predicted class
                     pred_class = raw_prediction if raw_prediction in classes else (
                         1 if pred_label == "PHISHING" else 0
                     )
@@ -186,22 +202,26 @@ class PredictionService:
                     else:
                         confidence = float(np.max(probas))
 
-                    # Phishing probability specifically
+                    # Specific phishing probability (Class 1)
                     if 1 in classes:
                         phishing_probability = float(probas[classes.index(1)])
                     elif "1" in classes:
                         phishing_probability = float(probas[classes.index("1")])
                     elif "PHISHING" in classes:
                         phishing_probability = float(probas[classes.index("PHISHING")])
+                    else:
+                        phishing_probability = confidence if pred_label == "PHISHING" else (1.0 - confidence)
                 except Exception as prob_err:
-                    logger.warning("predict_proba failed: %s", prob_err)
+                    logger.warning("predict_proba calculation failed: %s", prob_err)
+
+            model_ver = self.metadata.get("version") or self.metadata.get("model_name") or "1.0.0"
 
             return {
                 "available": True,
                 "prediction": pred_label,
                 "confidence": round(confidence, 4) if confidence is not None else None,
                 "phishing_probability": round(phishing_probability, 4) if phishing_probability is not None else None,
-                "model_version": self.metadata.get("version", "1.0.0"),
+                "model_version": str(model_ver),
                 "features_evaluated": len(feature_order),
                 "message": f"ML model inference executed successfully ({pred_label}).",
             }
@@ -263,10 +283,10 @@ class PredictionService:
             "num_subdirs": self._safe_int(char.get("num_subdirs")),
             "num_params": self._safe_int(char.get("num_params", char.get("param_count"))),
             "suspicious_words": self._safe_int(char.get("suspicious_words", char.get("suspicious_keywords_count"))),
+            "tld": str(tld_val),
             "special_char_count": self._safe_int(char.get("special_char_count")),
             "digits_count": self._safe_int(char.get("digits_count")),
             "entropy": self._safe_float(char.get("entropy", char.get("url_entropy"))),
-            "tld": str(tld_val),
         }
 
 
