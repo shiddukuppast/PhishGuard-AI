@@ -201,11 +201,11 @@ class RiskEngine:
                 severity="Low" if has_https else "High",
                 detected=not has_https,
                 description=(
-                    "TLS/SSL cryptographic session detected on target"
+                    "HTTPS scheme present; certificate and connection were not verified"
                     if has_https
                     else "Not detected — plaintext HTTP connection transmits without encryption"
                 ),
-                technical_detail="TLS Active" if has_https else "Cleartext HTTP",
+                technical_detail="HTTPS scheme only" if has_https else "Cleartext HTTP",
             ),
             SecurityIndicator(
                 id="ip-address",
@@ -278,7 +278,7 @@ class RiskEngine:
         else:
             explanation = (
                 "No critical phishing indicators or deceptive domain characteristics were identified. "
-                "The destination conforms to standard web conventions."
+                "Static URL analysis cannot establish that a destination is safe."
             )
 
         # Explicit notice regarding ML status

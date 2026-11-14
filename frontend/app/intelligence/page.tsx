@@ -69,8 +69,8 @@ export default function ThreatIntelligencePage() {
   const [metrics, setMetrics] = useState({
     tracked_campaigns: 0,
     top_target_sector: 'None',
-    avg_lure_lifespan_hours: 0,
-    heuristic_accuracy_pct: 0,
+    avg_lure_lifespan_hours: null as number | null,
+    heuristic_accuracy_pct: null as number | null,
   });
 
   // On-demand URL check state
@@ -185,14 +185,14 @@ export default function ThreatIntelligencePage() {
           <div className="p-4 rounded-xl bg-[#111827] border border-[#263244] space-y-1">
             <span className="text-[11px] font-mono text-slate-400 uppercase">Avg Lure Lifespan</span>
             <p className="text-2xl font-bold text-amber-400 font-sans">
-              {metrics.avg_lure_lifespan_hours > 0 ? `${metrics.avg_lure_lifespan_hours}h` : 'N/A'}
+              {metrics.avg_lure_lifespan_hours != null ? `${metrics.avg_lure_lifespan_hours}h` : 'N/A'}
             </p>
             <span className="text-[10px] font-mono text-slate-500 block">Bulletproof rotation cycle</span>
           </div>
           <div className="p-4 rounded-xl bg-[#111827] border border-[#263244] space-y-1">
             <span className="text-[11px] font-mono text-slate-400 uppercase">Heuristic Accuracy</span>
             <p className="text-2xl font-bold text-emerald-400 font-sans">
-              {metrics.heuristic_accuracy_pct > 0 ? `${metrics.heuristic_accuracy_pct}%` : 'N/A'}
+              {metrics.heuristic_accuracy_pct != null ? `${metrics.heuristic_accuracy_pct}%` : 'N/A'}
             </p>
             <span className="text-[10px] font-mono text-slate-500 block">Multi-layer verification</span>
           </div>

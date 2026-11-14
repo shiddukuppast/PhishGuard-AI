@@ -1,3 +1,7 @@
+import asyncio
+import copy
+import time
+from collections import OrderedDict
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
@@ -10,7 +14,8 @@ logger = logging.getLogger("phishguard.threat_intel")
 class ThreatIntelligenceService:
     def __init__(self):
         # In-memory LRU cache to minimize duplicate queries (url -> (timestamp, result))
-        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._cache = OrderedDict()
+        self._cache_max_entries = 1000
         self._cache_ttl_seconds = 3600  # 1 hour
 
     async def check_all_sources(self, target_url: str, domain: str) -> Dict[str, Any]:
@@ -19,11 +24,16 @@ class ThreatIntelligenceService:
         Strictly query API metadata without fetching or visiting the target URL.
         """
         cache_key = f"ti:{target_url}"
-        if cache_key in self._cache:
-            return self._cache[cache_key]
+        now = time.monotonic()
+        cached = self._cache.get(cache_key)
+        if cached and now - cached[0] < self._cache_ttl_seconds:
+            self._cache.move_to_end(cache_key)
+            return copy.deepcopy(cached[1])
+        self._cache.pop(cache_key, None)
 
-        phishtank_result = await self.check_phishtank(target_url)
-        openphish_result = await self.check_openphish(target_url, domain)
+        phishtank_result, openphish_result = await asyncio.gather(
+            self.check_phishtank(target_url), self.check_openphish(target_url, domain)
+        )
 
         combined = {
             "phishtank": phishtank_result,
@@ -34,8 +44,12 @@ class ThreatIntelligenceService:
             ),
         }
 
-        # Cache result
-        self._cache[cache_key] = combined
+        # Do not turn transient failures into cached negative results.
+        if phishtank_result.get("available") and openphish_result.get("available"):
+            self._cache[cache_key] = (time.monotonic(), copy.deepcopy(combined))
+            self._cache.move_to_end(cache_key)
+            while len(self._cache) > self._cache_max_entries:
+                self._cache.popitem(last=False)
         return combined
 
     async def check_phishtank(self, url: str) -> Dict[str, Any]:

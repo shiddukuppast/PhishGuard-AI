@@ -166,7 +166,7 @@ class URLAnalyzer:
         Returns: (normalized_url, hostname, domain)
         """
         cleaned = raw_url.strip() if raw_url else ""
-        has_scheme = cleaned.startswith(("http://", "https://"))
+        has_scheme = cleaned.lower().startswith(("http://", "https://"))
 
         parse_target = cleaned if has_scheme else f"http://{cleaned}"
 
@@ -204,7 +204,7 @@ class URLAnalyzer:
         num_dots = cleaned_url.count(".")
 
         # 3. HTTPS protocol detection
-        has_https = cleaned_url.lower().startswith("https")
+        has_https = parsed.scheme.lower() == "https"
 
         # 4. Host is raw IP address
         has_ip = cls.is_ip_address(hostname)

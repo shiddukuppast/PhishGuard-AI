@@ -1,5 +1,7 @@
 # PhishGuard AI – Machine Learning Subsystem & Forensic Audit
 
+> **Validation status:** The historical results below describe a leakage-affected dataset, not independent real-world accuracy. This repository does not include the referenced standalone training scripts or dataset, so those results cannot be reproduced from this checkout alone. Treat the bundled classifier as experimental.
+
 > **Platform:** PhishGuard AI | *Detect. Analyze. Protect.*  
 > **Component:** Machine Learning Phishing Classification Engine & Forensic Dataset Audit  
 > **Artifacts Directory:** `model/artifacts/`  
@@ -79,7 +81,7 @@ Our forensic investigation of `model/Data/phishing_features.csv` and previous tr
 4. **Generalization Consequence:**
    - Naive models trained on these features memorized `num_subdirs == 0` and `tld == 'Unknown'` as legitimate.
    - In production, real legitimate URLs (such as `https://google.com/search?q=test`) contain slashes and valid TLDs (`.com`), causing a naive model to falsely classify them as phishing.
-   - **Architectural Solution:** PhishGuard AI keeps ML predictions and rule-based risk scores conceptually separate. Heuristic rules and Threat Intelligence feeds guarantee legitimate URLs are not misclassified.
+   - **Architectural Solution:** PhishGuard AI keeps ML predictions and rule-based risk scores conceptually separate. Heuristic rules and threat intelligence provide additional signals but cannot guarantee correct classification.
 
 ---
 

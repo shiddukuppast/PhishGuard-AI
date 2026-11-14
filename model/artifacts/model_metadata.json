@@ -1,23 +1,24 @@
 {
-    "project": "PhishGuard AI",
-    "model_name": "Random Forest",
-    "dataset": "phishing_features.csv",
-    "training_samples": 1312,
-    "testing_samples": 32013,
-    "features_count": 11,
-    "imbalance_handling": "Random Undersampling",
-    "selection_metric": "Macro F1",
-    "label_mapping": {
-        "0": "0",
-        "1": "1"
-    },
-    "metrics": {
-        "Accuracy": 1.0,
-        "Macro Precision": 1.0,
-        "Macro Recall": 1.0,
-        "Macro F1": 1.0,
-        "Minority Recall": 1.0,
-        "ROC-AUC": 1.0,
-        "PR-AUC": 1.0
-    }
+  "project": "PhishGuard AI",
+  "model_name": "Random Forest",
+  "dataset": "phishing_features.csv",
+  "training_samples": 1312,
+  "testing_samples": 32013,
+  "features_count": 11,
+  "imbalance_handling": "Random Undersampling",
+  "selection_metric": "Macro F1",
+  "label_mapping": {
+    "0": "0",
+    "1": "1"
+  },
+  "metrics": {
+    "Accuracy": 1.0,
+    "Macro Precision": 1.0,
+    "Macro Recall": 1.0,
+    "Macro F1": 1.0,
+    "Minority Recall": 1.0,
+    "ROC-AUC": 1.0,
+    "PR-AUC": 1.0
+  },
+  "validation_warning": "Experimental model: the historical dataset has documented target leakage. Confidence is not validated real-world accuracy."
 }

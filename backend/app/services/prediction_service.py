@@ -223,7 +223,8 @@ class PredictionService:
                 "phishing_probability": round(phishing_probability, 4) if phishing_probability is not None else None,
                 "model_version": str(model_ver),
                 "features_evaluated": len(feature_order),
-                "message": f"ML model inference executed successfully ({pred_label}).",
+                "message": (f"ML model inference executed successfully ({pred_label}). "
+                            + self.metadata.get("validation_warning", "")),
             }
 
         except Exception as exc:

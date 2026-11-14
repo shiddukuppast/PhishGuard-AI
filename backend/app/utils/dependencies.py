@@ -129,8 +129,6 @@ async def get_optional_current_user(
     if not token:
         return None
 
-    try:
-        return await get_current_user(request=request, token=token)
-    except HTTPException:
-        return None
+    # A supplied invalid session must not silently turn a private scan into a guest scan.
+    return await get_current_user(request=request, token=token)
 

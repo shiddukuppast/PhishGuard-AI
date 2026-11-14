@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, Query, HTTPException, status
@@ -19,7 +20,7 @@ async def list_user_scans(
     current_user: UserModel = Depends(get_current_user),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(10, ge=1, le=100, description="Items per page"),
-    search: Optional[str] = Query(None, description="Search domain or URL"),
+    search: Optional[str] = Query(None, max_length=2048, description="Search domain or URL"),
     classification: Optional[str] = Query(None, description="Filter by LEGITIMATE, SUSPICIOUS, or PHISHING"),
     risk_level: Optional[str] = Query(None, description="Filter by LOW, MEDIUM, HIGH, or CRITICAL"),
     start_date: Optional[str] = Query(None, description="ISO start date filter"),
@@ -51,7 +52,7 @@ async def list_user_scans(
 
     # Search filter across url or domain
     if search:
-        regex_pattern = {"$regex": search.strip(), "$options": "i"}
+        regex_pattern = {"$regex": re.escape(search.strip()), "$options": "i"}
         query["$or"] = [
             {"domain": regex_pattern},
             {"original_url": regex_pattern},

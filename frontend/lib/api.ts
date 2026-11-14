@@ -53,7 +53,6 @@ export function clearAuthTokens(): void {
   if (typeof window !== 'undefined') {
     try {
       sessionStorage.removeItem(SESSION_TOKEN_KEY);
-      sessionStorage.clear();
     } catch {
       // Storage unavailable or disabled
     }
@@ -254,15 +253,15 @@ export function mapBackendScanToFrontend(backendScan: any): ScanResult {
         'Automated multi-factor risk evaluation performed from extracted syntactic and structural indicators.',
       flagReasons: backendScan.recommendations || [],
       impersonatedBrand:
-        chars.suspicious_keywords && chars.suspicious_keywords.length > 0
-          ? chars.suspicious_keywords.join(', ')
+        chars.impersonated_brands?.length > 0
+          ? chars.impersonated_brands.join(', ')
           : undefined,
       threatType:
         classification === 'Phishing'
           ? 'Active Credential Phishing'
           : classification === 'Suspicious'
           ? 'Anomalous URL Indicators'
-          : 'Verified Web Host',
+          : 'No high-risk indicators detected',
       heuristicsEngineVersion: ml.available
         ? `PhishGuard AI (ML Model ${ml.model_version || 'v1.0'})`
         : 'PhishGuard Defense Engine v2.4 (FastAPI Backend)',
@@ -301,9 +300,9 @@ export function mapBackendScanToFrontend(backendScan: any): ScanResult {
       domainLength: chars.domain_length || 0,
       urlLength: chars.url_length || (backendScan.original_url || backendScan.url || '').length,
       hasHttps: chars.has_https ?? true,
-      hasIpHost: chars.has_ip_host ?? false,
-      specialCharsCount: (chars.dots || 0) + (chars.hyphens || 0),
-      suspiciousKeywordsFound: chars.suspicious_keywords || [],
+      hasIpHost: chars.has_ip ?? false,
+      specialCharsCount: chars.special_char_count || 0,
+      suspiciousKeywordsFound: chars.suspicious_keywords_list || [],
     },
     isSimulated: false,
   };
@@ -399,7 +398,7 @@ export const scannerApi = {
   },
 
   async getScan(scanId: string): Promise<ScanResult> {
-    const data = await apiRequest<any>(`/scanner/${scanId}`, {
+    const data = await apiRequest<any>(`/history/${scanId}`, {
       method: 'GET',
     });
     return mapBackendScanToFrontend(data);
@@ -617,11 +616,14 @@ export const reportsApi = {
   },
 
   async downloadPdf(idOrScanId: string): Promise<Blob> {
-    const url = `${API_BASE_URL}/reports/${idOrScanId}/download`;
+    const url = `${getApiBaseUrl()}/reports/${encodeURIComponent(idOrScanId)}/download`;
 
+    const token = getAuthToken();
     const response = await fetch(url, {
       method: 'GET',
       credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) {
@@ -679,8 +681,8 @@ export const intelligenceApi = {
       metrics: {
         tracked_campaigns: number;
         top_target_sector: string;
-        avg_lure_lifespan_hours: number;
-        heuristic_accuracy_pct: number;
+        avg_lure_lifespan_hours: number | null;
+        heuristic_accuracy_pct: number | null;
       };
     }>('/intelligence/overview', { method: 'GET' });
   },

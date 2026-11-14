@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from typing import Dict, Any, List
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
+from app.schemas.scanner import ScanRequest
+from app.utils.dependencies import limiter
 from pydantic import BaseModel
 from app.config.settings import settings
 from app.config.database import get_db
@@ -15,8 +17,8 @@ from app.schemas.intelligence import (
 router = APIRouter(prefix="/intelligence", tags=["Threat Intelligence"])
 
 
-class CheckUrlRequest(BaseModel):
-    url: str
+class CheckUrlRequest(ScanRequest):
+    pass
 
 
 # Educational library of recognized structural evasion patterns
@@ -74,9 +76,9 @@ async def get_intelligence_overview():
         "configured": bool(settings.PHISHTANK_API_KEY),
         "service": "PhishTank",
         "type": "Community Feed",
-        "status": "Operational" if settings.PHISHTANK_API_KEY else "Service Unavailable",
+        "status": "Configured (not verified)" if settings.PHISHTANK_API_KEY else "Service Unavailable",
         "message": (
-            "PhishTank API query connector active and operational."
+            "PhishTank credentials configured; availability is checked on demand."
             if settings.PHISHTANK_API_KEY
             else "PhishTank API key not configured in backend environment."
         ),
@@ -87,9 +89,9 @@ async def get_intelligence_overview():
         "configured": bool(settings.OPENPHISH_API_KEY),
         "service": "OpenPhish",
         "type": "Zero-Day Feed",
-        "status": "Operational" if settings.OPENPHISH_API_KEY else "Service Unavailable",
+        "status": "Configured (not verified)" if settings.OPENPHISH_API_KEY else "Service Unavailable",
         "message": (
-            "OpenPhish commercial feed active and operational."
+            "OpenPhish credentials configured; availability is checked on demand."
             if settings.OPENPHISH_API_KEY
             else "OpenPhish feed subscription not configured in backend environment."
         ),
@@ -104,10 +106,11 @@ async def get_intelligence_overview():
         try:
             feed_phish_query = {
                 "classification": "PHISHING",
+                "user_id": None,
+                "public_feed": True,
                 "$or": [
                     {"threat_intelligence.phishtank.is_phishing": True},
                     {"threat_intelligence.openphish.is_phishing": True},
-                    {"user_id": None},
                 ],
             }
             total_phishing_count = await db.scans.count_documents(feed_phish_query)
@@ -133,8 +136,8 @@ async def get_intelligence_overview():
 
                 chars = doc.get("url_characteristics", {})
                 brand = (
-                    chars.get("suspicious_keywords", ["Unknown Lure"])[0].capitalize()
-                    if chars.get("suspicious_keywords")
+                    chars.get("suspicious_keywords_list", ["Unknown Lure"])[0].capitalize()
+                    if chars.get("suspicious_keywords_list")
                     else "Suspicious Target"
                 )
 
@@ -162,8 +165,8 @@ async def get_intelligence_overview():
         metrics={
             "tracked_campaigns": total_phishing_count,
             "top_target_sector": "Credential Harvesting" if total_phishing_count > 0 else "None",
-            "avg_lure_lifespan_hours": 0 if total_phishing_count == 0 else 18.4,
-            "heuristic_accuracy_pct": 0 if total_phishing_count == 0 else 98.4,
+            "avg_lure_lifespan_hours": None,
+            "heuristic_accuracy_pct": None,
         },
     )
 
@@ -173,7 +176,8 @@ async def get_intelligence_overview():
     status_code=status.HTTP_200_OK,
     summary="Check Target URL Against Threat Feeds",
 )
-async def check_url_threat_intel(req: CheckUrlRequest):
+@limiter.limit(settings.RATE_LIMIT_SCAN)
+async def check_url_threat_intel(request: Request, req: CheckUrlRequest):
     """
     On-demand verification of target URL against configured threat feeds.
     Strictly checks feed metadata without visiting the target URL.

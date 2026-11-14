@@ -18,5 +18,6 @@ async def test_threat_intel_unconfigured_keys():
 
     # Query again to verify caching
     cached_result = await service.check_all_sources("https://example.com", "example.com")
-    assert cached_result == result
+    assert cached_result["has_threat_intel_match"] == result["has_threat_intel_match"]
+    assert not service._cache
 

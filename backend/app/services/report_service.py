@@ -1,4 +1,5 @@
 import io
+from xml.sax.saxutils import escape
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from reportlab.lib.pagesizes import letter
@@ -101,11 +102,11 @@ class ReportService:
         meta_data = [
             [
                 Paragraph("<b>Target URL:</b>", body_style),
-                Paragraph(scan_data.get("original_url", ""), code_style),
+                Paragraph(escape(str(scan_data.get("original_url", ""))), code_style),
             ],
             [
                 Paragraph("<b>Target Domain:</b>", body_style),
-                Paragraph(scan_data.get("domain", ""), code_style),
+                Paragraph(escape(str(scan_data.get("domain", ""))), code_style),
             ],
             [
                 Paragraph("<b>Classification:</b>", body_style),
@@ -140,7 +141,7 @@ class ReportService:
         # Executive Explanation
         elements.append(Paragraph("1. Executive Threat Assessment", h2_style))
         explanation_text = scan_data.get("explanation", "Analysis completed without critical findings.")
-        elements.append(Paragraph(explanation_text, body_style))
+        elements.append(Paragraph(escape(str(explanation_text)), body_style))
         elements.append(Spacer(1, 10))
 
         # Security Indicators
@@ -151,10 +152,10 @@ class ReportService:
             for ind in indicators:
                 status_color = colors.HexColor("#10B981") if ind.get("status") == "safe" else colors.HexColor("#EF4444")
                 ind_rows.append([
-                    Paragraph(f"<b>{ind.get('name', '')}</b>", body_style),
+                    Paragraph(f"<b>{escape(str(ind.get('name', '')))}</b>", body_style),
                     Paragraph(f"<b>{ind.get('status', '').upper()}</b>", ParagraphStyle("st", parent=body_style, textColor=status_color)),
                     ind.get("severity", "Low"),
-                    Paragraph(ind.get("description", ""), body_style),
+                    Paragraph(escape(str(ind.get("description", ""))), body_style),
                 ])
             ind_table = Table(ind_rows, colWidths=[1.8 * inch, 0.9 * inch, 0.9 * inch, 3.4 * inch])
             ind_table.setStyle(
@@ -185,7 +186,7 @@ class ReportService:
 
         telemetry_rows = [
             [Paragraph("<b>ML Model Status:</b>", body_style), Paragraph(ml_avail, body_style)],
-            [Paragraph("<b>ML Inference Note:</b>", body_style), Paragraph(ml_msg, body_style)],
+            [Paragraph("<b>ML Inference Note:</b>", body_style), Paragraph(escape(str(ml_msg)), body_style)],
             [Paragraph("<b>PhishTank Feed:</b>", body_style), Paragraph(pt_status, body_style)],
             [Paragraph("<b>OpenPhish Feed:</b>", body_style), Paragraph(op_status, body_style)],
         ]
@@ -205,7 +206,7 @@ class ReportService:
         recs = scan_data.get("recommendations", [])
         if recs:
             for i, rec in enumerate(recs, start=1):
-                elements.append(Paragraph(f"• <b>[{i}]</b> {rec}", body_style))
+                elements.append(Paragraph(f"• <b>[{i}]</b> {escape(str(rec))}", body_style))
         else:
             elements.append(Paragraph("• Standard browsing hygiene applies.", body_style))
 

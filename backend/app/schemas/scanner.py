@@ -1,5 +1,8 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+import re
+import ipaddress
+from urllib.parse import urlsplit
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -14,10 +17,31 @@ class ScanRequest(BaseModel):
             raise ValueError("URL cannot be empty.")
         if len(cleaned) > 2048:
             raise ValueError("URL exceeds maximum length of 2048 characters.")
-        # Reject control characters and dangerous protocol schemes
-        lower = cleaned.lower()
-        if lower.startswith(("javascript:", "data:", "file:", "vbscript:", "blob:")):
-            raise ValueError("Unsupported or insecure URL protocol scheme.")
+        if any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in cleaned) or "\\" in cleaned:
+            raise ValueError("URL contains whitespace, control characters, or backslashes.")
+        # Bare hosts are accepted; explicit schemes must be HTTP(S).
+        target = cleaned
+        if not re.match(r"^https?://", target, re.IGNORECASE):
+            if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:(?![0-9]+(?:[/?#]|$))", target):
+                raise ValueError("Only HTTP and HTTPS URLs are supported.")
+            target = "http://" + target
+        try:
+            parsed = urlsplit(target)
+            host = parsed.hostname
+            port = parsed.port  # Validate malformed and out-of-range ports.
+            if not host or (parsed.netloc.endswith(":") and port is None):
+                raise ValueError("URL must contain a valid host.")
+            try:
+                ipaddress.ip_address(host)
+            except ValueError:
+                ascii_host = host.encode("idna").decode("ascii").rstrip(".")
+                if len(ascii_host) > 253 or not all(
+                    re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
+                    for label in ascii_host.split(".")
+                ):
+                    raise ValueError("URL must contain a valid host.")
+        except (ValueError, UnicodeError) as exc:
+            raise ValueError("URL must contain a valid host and port.") from exc
         return cleaned
 
 

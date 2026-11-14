@@ -134,6 +134,14 @@ class MockAsyncCollection:
     def _match(self, doc: Dict[str, Any], query: Dict[str, Any]) -> bool:
         if not query:
             return True
+        def field_value(key):
+            value = doc
+            for part in key.split("."):
+                if not isinstance(value, dict):
+                    return None
+                value = value.get(part)
+            return value
+
         for k, v in query.items():
             if k == "$or":
                 # Any sub-condition in $or must match
@@ -141,7 +149,7 @@ class MockAsyncCollection:
                     return False
             elif isinstance(v, dict):
                 # Operators like $regex, $gte, $lte
-                field_val = doc.get(k)
+                field_val = field_value(k)
                 if "$regex" in v:
                     import re
                     pattern = v["$regex"]
@@ -154,7 +162,7 @@ class MockAsyncCollection:
                     if not (field_val and field_val <= v["$lte"]):
                         return False
             else:
-                if doc.get(k) != v:
+                if field_value(k) != v:
                     return False
         return True
 
